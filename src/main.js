@@ -89,7 +89,7 @@ async function start() {
   const vehicle = new Vehicle(car, hf, colliders);
   vehicle.place(SPAWN.x, SPAWN.z, SPAWN.heading);
 
-  const chase = new ChaseCamera(scene, hf);
+  const chase = new ChaseCamera(scene, hf, car, settings.cameraMode);
   scene.activeCamera = chase.camera;
   chase.update(0, vehicle);
 
@@ -134,13 +134,16 @@ async function start() {
     vehicle.place(x, z, Math.atan2(tx, tz));
     chase._first = true;
   };
-  input.handlers.camera = () => toast(chase.cycle());
+  input.handlers.camera = () => {
+    toast(chase.cycle());
+    settings.cameraMode = chase.mode;
+    saveSettings(settings);
+  };
   input.handlers.reset = resetCar;
   input.attachKeyboard();
   input.attachTouch({
     steerZone: $("steer-zone"),
-    steerBase: $("steer-base"),
-    steerKnob: $("steer-knob"),
+    wheel: $("wheel"),
     gas: $("btn-gas"),
     brake: $("btn-brake"),
     hand: $("btn-hand"),
@@ -202,8 +205,7 @@ async function start() {
       preset = { ...PRESETS[level], trees: preset.trees, rocks: preset.rocks };
       applyScale();
       applyEffects();
-      settings.autoLevel = level;
-      saveSettings(settings);
+      // Not saved: next launch checks again (e.g. once Low Power Mode is off).
       toast(`Graphics set to ${levelName(level)} so it runs smoothly`);
     } else if (preset.scale > 0.75) {
       preset.scale = Math.max(0.75, preset.scale - 0.15);

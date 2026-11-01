@@ -1,4 +1,4 @@
-import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer } from "@babylonjs/core";
+import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer, Quaternion } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 
 export const WHEEL_RADIUS = 0.38;
@@ -131,6 +131,28 @@ export async function loadCar(scene, onProgress) {
     merged.setParent(w.spin);
     meshes.push(merged);
   }
+  // The steering wheel inside the cabin gets its own pivot so it can turn.
+  // It spins around its own local Y axis (the steering column).
+  let steeringPivot = null;
+  let steeringAxis = null;
+  const steeringRim = scene.getMeshByName("InteriorSteeringWheel01");
+  if (steeringRim) {
+    const parts = ["InteriorSteeringEmblem", "InteriorSteeringWheel01", "InteriorSteeringWheel02", "InteriorSteeringWheel03", "InteriorSteeringWheel04"]
+      .map((n) => scene.getMeshByName(n))
+      .filter((m) => m && m.getTotalVertices() > 0);
+    const wm = steeringRim.computeWorldMatrix(true);
+    steeringAxis = Vector3.TransformNormal(Vector3.Up(), wm).normalize();
+    steeringPivot = new TransformNode("steeringPivot", scene);
+    steeringPivot.parent = body;
+    steeringPivot.position = steeringRim.getAbsolutePosition().clone();
+    steeringPivot.rotationQuaternion = Quaternion.Identity();
+    const merged = mergeParts(parts, true);
+    merged.name = "car_steeringWheel";
+    merged.setParent(steeringPivot);
+    parts.forEach((m) => wheelParts.add(m));
+    meshes.push(merged);
+  }
+
   const byMaterial = new Map();
   for (const m of result.meshes) {
     if (m.getTotalVertices() === 0 || wheelParts.has(m) || !m.material) continue;
@@ -165,7 +187,9 @@ export async function loadCar(scene, onProgress) {
     halfTrack: Math.abs(fl.x - fr.x) / 2,
   };
 
-  return { root, body, wheels, meshes, shadowMeshes, geometry, materials: [...materials] };
+  // Driver's eye: centre seat, behind and above the steering wheel.
+  const eye = steeringPivot ? steeringPivot.position.add(new Vector3(0, 0.3, -0.6)) : new Vector3(0, 0.95, 0.2);
+  return { root, body, wheels, meshes, shadowMeshes, geometry, materials: [...materials], steeringPivot, steeringAxis, eye };
 }
 
 export function setPaint(car, color) {

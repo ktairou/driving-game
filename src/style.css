@@ -113,70 +113,56 @@ button {
   background: var(--glass-strong);
 }
 
-/* Steering: the whole lower-left area listens; the pad jumps under your thumb. */
+/* Steering wheel: grab anywhere on or around it and turn. */
 #steer-zone {
   position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 44%;
-  height: 72%;
+  left: calc(10px + var(--safe-l));
+  bottom: calc(10px + var(--safe-b));
+  width: 250px;
+  height: 250px;
+  display: grid;
+  place-items: center;
 }
 
-#steer-base {
-  position: absolute;
-  left: calc(36px + var(--safe-l));
-  bottom: calc(40px + var(--safe-b));
-  width: 190px;
-  height: 92px;
-  border-radius: 46px;
-  background: var(--glass);
-  border: 1px solid var(--line);
-  transition: opacity 0.15s;
-  opacity: 0.8;
+#wheel {
+  width: 200px;
+  height: 200px;
+  overflow: visible;
+  transition: transform 0.18s ease-out;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
 }
 
-#steer-base.active {
-  opacity: 1;
+#wheel.held {
   transition: none;
 }
 
-#steer-knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 66px;
-  height: 66px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  transform: translate(-50%, -50%);
+.wheel-grip {
+  fill: none;
+  stroke: rgba(14, 18, 24, 0.55);
+  stroke-width: 30;
 }
 
-.arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 18px;
-  color: var(--muted);
+.wheel-rim {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 15;
 }
 
-.arrow.left {
-  left: 16px;
+.wheel-spoke {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 13;
+  stroke-linecap: round;
 }
 
-.arrow.right {
-  right: 16px;
+.wheel-hub {
+  fill: rgba(14, 18, 24, 0.75);
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 4;
 }
 
-.hint {
-  position: absolute;
-  left: calc(36px + var(--safe-l));
-  bottom: calc(12px + var(--safe-b));
-  width: 190px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--muted);
-  pointer-events: none;
+.wheel-mark {
+  fill: var(--accent);
 }
 
 .pedals {

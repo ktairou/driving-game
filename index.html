@@ -33,12 +33,13 @@
       </div>
 
       <div id="steer-zone">
-        <div id="steer-base">
-          <span class="arrow left">&#9664;</span>
-          <span class="arrow right">&#9654;</span>
-          <div id="steer-knob"></div>
-        </div>
-        <div class="hint">Slide to steer</div>
+        <svg id="wheel" viewBox="0 0 200 200" aria-label="Steering wheel">
+          <circle class="wheel-grip" cx="100" cy="100" r="84" />
+          <circle class="wheel-rim" cx="100" cy="100" r="84" />
+          <path class="wheel-spoke" d="M18 106 Q60 98 78 104 M182 106 Q140 98 122 104 M100 124 L100 182" />
+          <circle class="wheel-hub" cx="100" cy="104" r="26" />
+          <rect class="wheel-mark" x="94" y="9" width="12" height="18" rx="4" />
+        </svg>
       </div>
 
       <div class="pedals">

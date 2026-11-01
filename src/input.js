@@ -1,6 +1,7 @@
 import { clamp } from "./noise.js";
 
-const STEER_RANGE_PX = 80; // finger travel for full steering lock
+const WHEEL_LOCK = 120; // degrees of on-screen wheel turn for full steering lock
+const WHEEL_DEAD_PX = 18; // touches this close to the hub don't turn the wheel
 
 // Combines keyboard (for testing on a computer) and on-screen touch controls.
 export class Input {
@@ -26,41 +27,50 @@ export class Input {
     window.addEventListener("blur", () => this.keys.clear());
   }
 
-  attachTouch({ steerZone, steerBase, steerKnob, gas, brake, hand }) {
+  attachTouch({ steerZone, wheel, gas, brake, hand }) {
+    // Steering wheel: the angle your thumb sweeps around the wheel's centre
+    // turns it. Full lock is WHEEL_LOCK degrees either way.
     let steerId = null;
-    let originX = 0;
-    const restBase = () => {
-      steerBase.classList.remove("active");
-      steerBase.style.transform = "";
-      steerKnob.style.transform = "translate(-50%, -50%)";
-    };
+    let lastAngle = 0;
+    let wheelAngle = 0;
+    let cx = 0;
+    let cy = 0;
+    const show = () => (wheel.style.transform = `rotate(${wheelAngle}deg)`);
+    const angleAt = (e) => (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI;
     steerZone.addEventListener("pointerdown", (e) => {
       if (steerId !== null) return;
       steerId = e.pointerId;
       steerZone.setPointerCapture(e.pointerId);
-      originX = e.clientX;
-      const br = steerBase.getBoundingClientRect();
-      // Move the steering pad under the finger.
-      const dx = e.clientX - (br.left + br.width / 2);
-      const dy = e.clientY - (br.top + br.height / 2);
-      steerBase.style.transform = `translate(${dx}px, ${dy}px)`;
-      steerBase.classList.add("active");
+      const r = wheel.getBoundingClientRect();
+      cx = r.left + r.width / 2;
+      cy = r.top + r.height / 2;
+      lastAngle = angleAt(e);
+      wheel.classList.add("held");
       this.touch.steering = true;
-      this.touch.steer = 0;
       e.preventDefault();
     });
     steerZone.addEventListener("pointermove", (e) => {
       if (e.pointerId !== steerId) return;
-      const v = clamp((e.clientX - originX) / STEER_RANGE_PX, -1, 1);
-      this.touch.steer = v;
-      steerKnob.style.transform = `translate(calc(-50% + ${v * 38}px), -50%)`;
+      const a = angleAt(e);
+      // Near the hub the angle jumps about wildly, so ignore it there.
+      if (Math.hypot(e.clientX - cx, e.clientY - cy) > WHEEL_DEAD_PX) {
+        let d = a - lastAngle;
+        if (d > 180) d -= 360;
+        if (d < -180) d += 360;
+        wheelAngle = clamp(wheelAngle + d, -WHEEL_LOCK, WHEEL_LOCK);
+        this.touch.steer = wheelAngle / WHEEL_LOCK;
+        show();
+      }
+      lastAngle = a;
     });
     const endSteer = (e) => {
       if (e.pointerId !== steerId) return;
       steerId = null;
       this.touch.steering = false;
       this.touch.steer = 0;
-      restBase();
+      wheelAngle = 0;
+      wheel.classList.remove("held"); // springs back to centre (CSS transition)
+      show();
     };
     steerZone.addEventListener("pointerup", endSteer);
     steerZone.addEventListener("pointercancel", endSteer);

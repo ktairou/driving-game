@@ -8,7 +8,7 @@ export const PRESETS = {
 export const LEVELS = ["low", "medium", "high"];
 
 const KEY = "drivingGame.settings.v1";
-const DEFAULTS = { graphics: "auto", autoLevel: null, units: "mph", showFps: true };
+const DEFAULTS = { graphics: "auto", units: "mph", showFps: true, cameraMode: 0 };
 
 export function loadSettings() {
   try {
@@ -30,8 +30,8 @@ export function isTouchDevice() {
   return navigator.maxTouchPoints > 1 || "ontouchstart" in window;
 }
 
+// Auto starts from a guess each launch and steps down if the frame rate is low.
 export function startingLevel(settings) {
-  if (settings.graphics !== "auto") return settings.graphics;
-  if (settings.autoLevel && PRESETS[settings.autoLevel]) return settings.autoLevel;
+  if (settings.graphics !== "auto" && PRESETS[settings.graphics]) return settings.graphics;
   return isTouchDevice() ? "medium" : "high";
 }

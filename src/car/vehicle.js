@@ -310,10 +310,12 @@ export class Vehicle {
   }
 
   sync() {
-    const { root, body, wheels } = this.car;
+    const { root, body, wheels, steeringPivot, steeringAxis } = this.car;
     root.position.set(this.x, this.y, this.z);
     root.rotation.set(this.pitch, this.heading, this.roll);
     body.rotation.set(this.bodyPitch, 0, this.bodyRoll);
+    // Cabin steering wheel turns 4.5x the front wheels' angle.
+    if (steeringPivot) Quaternion.RotationAxisToRef(steeringAxis, this.steer * 4.5, steeringPivot.rotationQuaternion);
     // Wheels: steer the fronts, spin all, and let each follow the ground a bit.
     const planeAt = (lz, lx) => this.y - Math.tan(this.pitch) * lz + Math.tan(this.roll) * lx;
     wheels.forEach((w, i) => {
@@ -326,5 +328,3 @@ export class Vehicle {
     });
   }
 }
-
-export { Quaternion };
