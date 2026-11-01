@@ -148,7 +148,7 @@ export class Vehicle {
     // Speed-sensitive, like a modern car: full lock is tight in town, but at
     // speed it's limited to what the tyres can hold (about 1.1 g), so the same
     // wheel movement is gentler the faster you go.
-    const maxSteer = clamp((11 * this.L) / Math.max(speed * speed, 1), 0.035, 0.6);
+    const maxSteer = clamp((12.5 * this.L) / Math.max(speed * speed, 1), 0.04, 0.6);
     let target;
     if (input.steerAngle !== undefined) {
       // The self-driver asks for a road-wheel angle directly.
@@ -160,7 +160,7 @@ export class Vehicle {
       this.steerInput += clamp(input.steer - this.steerInput, -wheelRate * dt, wheelRate * dt);
       // ...and small movements near the centre do very little, for fine control.
       const w = this.steerInput;
-      target = Math.sign(w) * Math.pow(Math.abs(w), 1.7) * maxSteer;
+      target = Math.sign(w) * Math.pow(Math.abs(w), 1.35) * maxSteer;
     }
     // The front wheels can't snap round instantly.
     const rack = lerp(2.4, 0.6, clamp(speed / 35, 0, 1));
@@ -175,9 +175,13 @@ export class Vehicle {
       if (vLong > -0.8) drive = throttle * Math.min(this.maxDrive, this.power / Math.max(Math.abs(vLong), 1));
       else brake += throttle;
     }
-    if (pedalBrake > 0) {
-      if (vLong > 0.8) brake += pedalBrake;
-      else if (vLong > -8) drive -= pedalBrake * this.reverseForce; // reverse tops out near 18 mph
+    // The brake only ever slows or holds the car; Reverse backs it up
+    // (stopping it first if it is still rolling forwards).
+    if (pedalBrake > 0) brake += pedalBrake;
+    const reverse = input.reverse ?? 0;
+    if (reverse > 0) {
+      if (vLong > 0.8) brake += reverse;
+      else if (vLong > -8) drive -= reverse * this.reverseForce; // reverse tops out near 18 mph
     }
     const handbrake = input.handbrake;
 
@@ -233,7 +237,7 @@ export class Vehicle {
     } else {
       this.yawRate *= 1 - 0.8 * dt;
     }
-    if (Math.abs(vLong) < 0.05 && throttle === 0 && pedalBrake === 0) vLong = 0;
+    if (Math.abs(vLong) < 0.05 && throttle === 0 && !(input.reverse > 0)) vLong = 0;
 
     this.heading += this.yawRate * dt;
     const s2 = Math.sin(this.heading);
@@ -242,7 +246,7 @@ export class Vehicle {
     this.vz = c2 * vLong - s2 * vLat;
 
     // Gravity pulls you down hills (but a stopped car stays parked).
-    if (this.grounded && !(throttle === 0 && pedalBrake === 0 && speed < 1.5)) {
+    if (this.grounded && !(throttle === 0 && !(input.reverse > 0) && speed < 1.5)) {
       const n = this.world.getNormal(this.x, this.z, 1.5);
       this.vx += n[0] * G * n[1] * dt;
       this.vz += n[2] * G * n[1] * dt;

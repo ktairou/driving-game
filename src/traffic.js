@@ -1,6 +1,7 @@
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core";
 import { clamp, lerp, mulberry32 } from "./noise.js";
 import { inTown } from "./world/road.js";
+import { speedLimitAt } from "./world/trafficLights.js";
 import { ISLANDS, LANE_OFFSET, ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./world/layout.js";
 
 export const CAR_COLOURS = [
@@ -185,6 +186,10 @@ export class Traffic {
       }
       if (player) gap = Math.min(gap, ahead(player.x, player.z, 1.8));
       if (gap < 28) target = Math.min(target, Math.max(0, (gap - 7) * 0.8));
+      // Keep to the speed limit, and wait at red lights.
+      target = Math.min(target, speedLimitAt(car.x, car.z) / 3.6);
+      const stop = this.lights ? this.lights.stopDistance(car) : Infinity;
+      if (stop < 70) target = Math.min(target, Math.max(0, (stop - 0.5) * 0.6));
       if (car.stopTimer > 0) {
         car.stopTimer -= dt;
         target = 0;

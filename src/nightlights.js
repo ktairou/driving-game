@@ -224,7 +224,7 @@ export class NightLights {
         l.intensity = 0;
         return;
       }
-      l.position.set(s.x, s.y + 7.2, s.z);
+      l.position.set(s.x, s.y + (s.lightHeight ?? 7.2), s.z);
       l.intensity = on * 60 * smoothstep(58, 30, Math.sqrt(d2));
     });
   }

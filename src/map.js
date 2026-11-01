@@ -20,6 +20,26 @@ export const PLACES = [
 ];
 
 const toPx = (x, z) => [(x - X0) / MPP, (Z1 - z) / MPP];
+
+// Fuel stations, shown as small pump badges on both maps.
+let FUEL = [];
+export function setFuelStations(list) {
+  FUEL = list;
+}
+
+function drawFuelBadge(c, x, y, r) {
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.fillStyle = "#0d5f63";
+  c.fill();
+  c.lineWidth = r * 0.22;
+  c.strokeStyle = "#ffffff";
+  c.stroke();
+  // A tiny pump.
+  c.fillStyle = "#ffffff";
+  c.fillRect(x - r * 0.38, y - r * 0.45, r * 0.5, r * 0.9);
+  c.fillRect(x + r * 0.12, y - r * 0.2, r * 0.3, r * 0.12);
+}
 const toWorld = (px, py) => [X0 + px * MPP, Z1 - py * MPP];
 
 // Paints the whole world once: sea, beaches, hills (with shading), towns, roads.
@@ -192,6 +212,7 @@ export class MiniMap {
     c.translate(-px, -py);
     c.drawImage(this.image, 0, 0);
     drawRoute(c, route, progress);
+    for (const s of FUEL) drawFuelBadge(c, ...toPx(s.x, s.z), 4.5);
     if (destination) {
       const [dx, dy] = toPx(destination.x, destination.z);
       c.beginPath();
@@ -317,6 +338,7 @@ export class BigMap {
       c.fillStyle = "#fff";
       c.fillText(p.name, sx, sy - 12);
     }
+    for (const s of FUEL) drawFuelBadge(c, ...screen(s.x, s.z), 9);
     if (this.destination) {
       const [dx, dy] = screen(this.destination.x, this.destination.z);
       drawPin(c, dx, dy, "#e2574c");

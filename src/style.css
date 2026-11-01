@@ -262,25 +262,33 @@ button {
   background: rgba(63, 191, 127, 0.55);
 }
 
-.hand {
+.reverse {
   grid-column: 1;
   grid-row: 1;
   justify-self: center;
-  width: 76px;
+  width: 92px;
   height: 52px;
   border-radius: 26px;
   background: var(--glass);
   border: 1px solid var(--line);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  line-height: 1.15;
-  color: var(--muted);
+  color: var(--text);
 }
 
-.hand.pressed {
-  background: rgba(255, 207, 74, 0.5);
-  color: var(--text);
+.reverse.pressed {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* Sound button: speaker with waves, or crossed out when muted. */
+#btn-sound .sound-off,
+#btn-sound.muted .sound-on {
+  display: none;
+}
+
+#btn-sound.muted .sound-off {
+  display: inline;
 }
 
 .speedo {
@@ -295,6 +303,100 @@ button {
   border-radius: 16px;
   background: var(--glass);
   pointer-events: none !important;
+}
+
+/* Round speed-limit sign beside the speed. */
+.limit {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 46px;
+  height: 46px;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 5px solid #d8392f;
+  background: #fff;
+  color: #111;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fuel (or battery) left. */
+.fuel {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+}
+
+.fuel-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fuel .icon-bolt,
+.fuel.electric .icon-pump {
+  display: none;
+}
+
+.fuel.electric .icon-bolt {
+  display: inline;
+}
+
+.fuel-bar {
+  width: 64px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+#fuel-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  background: #7ee0a5;
+}
+
+.fuel.low #fuel-fill {
+  background: #ffb547;
+}
+
+.fuel.empty #fuel-fill {
+  background: #ff5a4f;
+}
+
+.fuel.empty {
+  animation: fuel-blink 1s steps(2, start) infinite;
+}
+
+@keyframes fuel-blink {
+  to {
+    opacity: 0.35;
+  }
+}
+
+.fuel-action {
+  bottom: calc(150px + var(--safe-b));
+}
+
+.hud-fuel .pedals,
+.hud-fuel #steer-zone,
+.hud-fuel #btn-fuel {
+  display: none;
+}
+
+.speedo.over #speed {
+  color: #ff5a4f;
 }
 
 #speed {

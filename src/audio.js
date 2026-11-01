@@ -93,7 +93,7 @@ export class GameAudio {
       return g;
     };
 
-    // --- Engine: pulse loop + a growl on top ---------------------------------
+    // --- Engine: one pulse loop, played faster as the revs rise ---------------
     this.engineSrc = loop(engineCycle(ctx));
     this.engineTone = filter("lowpass", 900, 1.2);
     const shaper = ctx.createWaveShaper();
@@ -105,12 +105,6 @@ export class GameAudio {
     shaper.curve = curve;
     this.engineGain = gain(0);
     this.engineSrc.connect(this.engineTone).connect(shaper).connect(this.engineGain).connect(this.master);
-    this.growl = ctx.createOscillator();
-    this.growl.type = "sawtooth";
-    this.growlFilter = filter("lowpass", 400, 2);
-    this.growlGain = gain(0);
-    this.growl.connect(this.growlFilter).connect(this.growlGain).connect(this.master);
-    this.growl.start();
 
     // --- Car noises ---------------------------------------------------------------
     this.tyreGain = gain(0);
@@ -237,18 +231,15 @@ export class GameAudio {
     const moving = clamp(speed / 6, 0, 1);
     const idle = !driving ? 0 : 0.035 + moving * 0.11; // nearly silent when stopped
     this._set(this.engineSrc.playbackRate, Math.max(0.5, rpm / 1000), 0.05);
-    this._set(this.engineTone.frequency, 400 + load * 2200 + rpm * 0.15);
+    this._set(this.engineTone.frequency, 400 + load * 1300 + rpm * 0.1);
     this._set(this.engineGain.gain, driving ? (idle + load * 0.3) * (inCabin ? 0.8 : 1) : 0, 0.12);
-    this._set(this.growl.frequency, (rpm / 60) * 4, 0.05);
-    this._set(this.growlFilter.frequency, 250 + load * 700);
-    this._set(this.growlGain.gain, driving ? 0.008 + moving * 0.025 + load * 0.06 : 0, 0.12);
 
     const slip = car ? clamp((car.slip - 0.1) * 4, 0, 1) : 0;
     this._set(this.tyreGain.gain, driving && car.grounded ? slip * 0.22 * clamp(speed / 8, 0, 1) : 0);
     this._set(this.scrapeGain.gain, driving ? car.scrape * (0.3 + Math.random() * 0.15) : 0, 0.03);
     this._set(this.roadGain.gain, driving && car.grounded ? clamp(speed / 40, 0, 1) * 0.35 : 0);
     const windAmt = driving ? clamp((speed - 8) / 50, 0, 1) : 0;
-    this._set(this.windGain.gain, windAmt * windAmt * (inCabin ? 0.12 : 0.3));
+    this._set(this.windGain.gain, windAmt * windAmt * (inCabin ? 0.06 : 0.12));
     this._set(this.windFilter.frequency, 500 + speed * 18);
 
     // Background: depends on where you are and the weather.

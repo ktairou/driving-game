@@ -54,7 +54,8 @@ const CLIPS = [
 const DRAW_DIST = 320;
 const MIRROR_Z = Matrix.Scaling(1, 1, -1);
 
-const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
+// (When the game is in the background frames stop, so just yield instead.)
+const nextFrame = () => new Promise((r) => (document.hidden ? setTimeout(r, 0) : requestAnimationFrame(() => r())));
 const baseName = (n) => n.replace(/^Clone of /, "");
 
 function turnTowards(a, b, maxStep) {
@@ -337,7 +338,7 @@ export class People {
     av.mesh.alwaysSelectAsActiveMesh = true;
     av.mesh.setEnabled(true);
     holder.setEnabled(false);
-    return { holder, groups, mesh: av.mesh, weights: { walk: 0, run: 0, idle: 1 }, playing: true };
+    return { holder, groups, mesh: av.mesh, nodes: av.nodes, weights: { walk: 0, run: 0, idle: 1 }, playing: true };
   }
 
   get meshList() {

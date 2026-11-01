@@ -12,6 +12,11 @@ export const WEATHERS = [
   { id: "fog", name: "Fog", sun: 1.2, env: 0.65, fog: 0.011, fogColor: [0.72, 0.74, 0.76], overcast: 0.7, wet: 0.3, snow: 0, rain: 0, flakes: 0, grip: 0.95 },
 ];
 
+// "Auto": the weather changes by itself every few minutes. How likely each
+// kind is (the desert hardly ever gets rain and never snow).
+const AUTO_ODDS = { sunny: 34, cloudy: 26, rain: 15, storm: 6, fog: 9, snow: 10 };
+const DESERT_ODDS = { sunny: 62, cloudy: 28, fog: 10 };
+
 Effect.ShadersStore.precipVertexShader = `
 precision highp float;
 attribute vec3 position;   // random spot inside the box (0..1)
@@ -106,6 +111,8 @@ export class Weather {
     this.world = world;
     this.materials = materials; // { asphalt: [...], leaves: [...] }
     this.index = 0;
+    this.auto = false;
+    this.autoTimer = 0;
     this.cur = { ...WEATHERS[0], fogColor: [...WEATHERS[0].fogColor] };
     this.flash = 0;
     this.nextLightning = 8;
@@ -134,23 +141,60 @@ export class Weather {
   }
 
   set(id) {
+    if (id === "auto") {
+      this.auto = true;
+      this.autoTimer = 120 + Math.random() * 120;
+      return;
+    }
+    this.auto = false;
     const i = WEATHERS.findIndex((w) => w.id === id);
     this.index = i < 0 ? 0 : i;
+  }
+
+  // "auto" or the chosen weather's id.
+  get mode() {
+    return this.auto ? "auto" : this.target.id;
   }
 
   get target() {
     return WEATHERS[this.index];
   }
 
+  // Auto, then each kind in turn. Returns { id, name } of the new choice.
   cycle() {
-    this.index = (this.index + 1) % WEATHERS.length;
-    return this.target;
+    if (this.auto) this.set(WEATHERS[0].id);
+    else if (this.index === WEATHERS.length - 1) this.set("auto");
+    else this.set(WEATHERS[this.index + 1].id);
+    return this.auto ? { id: "auto", name: "Auto weather" } : this.target;
+  }
+
+  _autoPick(desert) {
+    const odds = desert ? DESERT_ODDS : AUTO_ODDS;
+    const choices = Object.entries(odds).filter(([id]) => id !== this.target.id);
+    let r = Math.random() * choices.reduce((n, [, w]) => n + w, 0);
+    for (const [id, w] of choices) {
+      r -= w;
+      if (r <= 0) return id;
+    }
+    return choices[0][0];
   }
 
   update(dt, camera, vehicle) {
     this.time += dt;
+    if (this.auto) {
+      const desert = this.world.islandAt(vehicle.x, vehicle.z)?.def.climate === "desert";
+      // Driving into the desert in rain or snow: it clears up soon.
+      if (desert && !(this.target.id in DESERT_ODDS)) this.autoTimer = Math.min(this.autoTimer, 15);
+      this.autoTimer -= dt;
+      if (this.autoTimer <= 0) {
+        const pick = this._autoPick(desert);
+        this.index = WEATHERS.findIndex((w) => w.id === pick);
+        this.autoTimer = 150 + Math.random() * 210;
+      }
+    }
     const t = this.target;
-    const k = 1 - Math.exp(-dt * 0.8); // about 4 s to settle
+    // About 4 s to settle when you pick the weather; a slow drift on Auto.
+    const k = 1 - Math.exp(-dt * (this.auto ? 0.1 : 0.8));
     const c = this.cur;
     for (const key of ["sun", "env", "fog", "overcast", "wet", "snow", "rain", "flakes", "grip"]) c[key] = lerp(c[key], t[key], k);
     for (let i = 0; i < 3; i++) c.fogColor[i] = lerp(c.fogColor[i], t.fogColor[i], k);

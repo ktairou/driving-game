@@ -12,11 +12,12 @@ export class Input {
     this.throttle = 0;
     this.brake = 0;
     this.handbrake = false;
+    this.reverse = 0;
     this.steerAnalog = false;
     this.footMode = false;
     this.stick = { x: 0, y: 0 };
     this.keys = new Set();
-    this.touch = { steer: 0, steering: false, gas: false, brake: false, hand: false, stickX: 0, stickY: 0 };
+    this.touch = { steer: 0, steering: false, gas: false, brake: false, reverse: false, stickX: 0, stickY: 0 };
     this.handlers = { camera: () => {}, reset: () => {}, any: () => {} };
   }
 
@@ -34,10 +35,10 @@ export class Input {
 
   // True while a thumb is on any driving control (used to cancel self-driving).
   get touching() {
-    return this.touch.steering || this.touch.gas || this.touch.brake || this.touch.hand;
+    return this.touch.steering || this.touch.gas || this.touch.brake || this.touch.reverse;
   }
 
-  attachTouch({ steerZone, wheel, stick, stickKnob, gas, brake, hand }) {
+  attachTouch({ steerZone, wheel, stick, stickKnob, gas, brake, reverse }) {
     let steerId = null;
     let lastAngle = 0;
     let wheelAngle = 0;
@@ -125,7 +126,7 @@ export class Input {
     };
     pedal(gas, "gas");
     pedal(brake, "brake");
-    pedal(hand, "hand");
+    pedal(reverse, "reverse");
   }
 
   update() {
@@ -144,7 +145,8 @@ export class Input {
     }
     this.throttle = this.touch.gas || up ? 1 : 0;
     this.brake = this.touch.brake || down ? 1 : 0;
-    this.handbrake = this.touch.hand || k.has("Space");
+    this.reverse = this.touch.reverse || k.has("KeyX") ? 1 : 0;
+    this.handbrake = k.has("Space");
     // On foot: joystick, or keys (hold Shift to run).
     if (this.touch.steering) {
       this.stick.x = this.touch.stickX;

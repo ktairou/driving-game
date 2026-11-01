@@ -1,5 +1,6 @@
 import { clamp } from "./noise.js";
 import { inTown } from "./world/road.js";
+import { speedLimitAt } from "./world/trafficLights.js";
 import { LANE_OFFSET, ROAD_SAMPLE_STEP } from "./world/layout.js";
 
 // Route finding over the road network (every road sample is a node) and a
@@ -162,7 +163,7 @@ export class AutoDriver {
   }
 
   // Returns the controls to apply this frame.
-  drive(v, traffic) {
+  drive(v, traffic, rerouted = false) {
     const pts = this.route.points;
     const n = pts.length;
     // Move the progress marker forward to the closest point.
@@ -177,12 +178,13 @@ export class AutoDriver {
     }
     this.progress = best;
     // Knocked well off the route (a crash, say): work out a new one from here.
-    if (bestD > 25 * 25 && this.navigator) {
+    // (Only once per frame: far from any road, a fresh route starts just as far away.)
+    if (bestD > 25 * 25 && this.navigator && !rerouted) {
       const end = pts[n - 1];
       const fresh = this.navigator.route(v.x, v.z, end.x, end.z);
       if (fresh) {
         this.start(fresh);
-        return this.drive(v, traffic);
+        return this.drive(v, traffic, true);
       }
     }
 
@@ -219,6 +221,10 @@ export class AutoDriver {
     }
     const left = (n - 1 - best) * ROAD_SAMPLE_STEP;
     target = Math.min(target, Math.sqrt(2 * 3.2 * Math.max(0, left - 6)));
+    // Keep to the speed limit, and wait at red lights.
+    target = Math.min(target, speedLimitAt(v.x, v.z) / 3.6);
+    const redStop = this.lights ? this.lights.stopAhead(v.x, v.z, v.heading, speed) : Infinity;
+    if (redStop < 75) target = Math.min(target, Math.max(0, (redStop - 1) * 0.55));
     // Don't run into a car going the same way in front. (Cars crossing or
     // coming the other way are ignored, or two drivers could wait for each other.)
     if (traffic) {
@@ -239,6 +245,8 @@ export class AutoDriver {
       // Handbrake, not the brake pedal: the pedal would start reversing.
       return { steer: 0, steerAngle: 0, throttle: 0, brake: 0, handbrake: true, steerAnalog: true };
     }
+    // Waiting at a light: hold the car with the handbrake (the brake pedal would reverse).
+    if (target < 0.3 && speed < 1.5) return { steer: 0, steerAngle: 0, throttle: 0, brake: 0, handbrake: true, steerAnalog: true };
     const throttle = speed < target - 0.4 ? clamp((target - speed) / 4, 0.25, 1) : 0;
     const brake = speed > target + 1.2 ? clamp((speed - target) / 5, 0.15, 1) : 0;
     // Pure pursuit: the wheel angle that arcs the car onto the target point.

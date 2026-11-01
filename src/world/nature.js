@@ -181,7 +181,7 @@ export function buildNature(scene, world, colliders, quality) {
         if (rand() > smoothstep(0.42, 0.7, density)) continue;
         // Keep trunks and branches well clear of every road.
         if (world.getRoadDistance(px, pz) < ROAD_HALF_WIDTH + 10) continue;
-        if (inTown(px, pz, 12) || !awayFromLandmarks(px, pz)) continue;
+        if (inTown(px, pz, 12) || !awayFromLandmarks(px, pz) || !world.isClear(px, pz)) continue;
         const y = world.getHeight(px, pz);
         if (y < 4) continue; // beach or water
         const n = world.getNormal(px, pz, 2);
@@ -267,7 +267,7 @@ export function buildNature(scene, world, colliders, quality) {
       const z = def.cz + (rand() * 2 - 1) * (def.coast - 40);
       const d = world.getRoadDistance(x, z);
       const s = 0.5 + Math.pow(rand(), 2) * 3.2;
-      if (d < ROAD_HALF_WIDTH + 4 + s * 1.4 || inTown(x, z, 5) || !awayFromLandmarks(x, z)) continue;
+      if (d < ROAD_HALF_WIDTH + 4 + s * 1.4 || inTown(x, z, 5) || !awayFromLandmarks(x, z) || !world.isClear(x, z)) continue;
       const y = world.getHeight(x, z);
       if (y < 1) continue;
       const n = world.getNormal(x, z, 2);

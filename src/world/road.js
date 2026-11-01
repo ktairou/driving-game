@@ -185,7 +185,8 @@ export function buildRoad(scene, world, colliders) {
     const railOff = hw + 1.2;
     for (let side = -1; side <= 1; side += 2) {
       const needs = F.map((f, i) => {
-        if (isBridge(i) || nearMeet(i, 18) || inTown(f.c[0], f.c[2], 30)) return false;
+        // (No barrier across the way into a fuel station.)
+        if (isBridge(i) || nearMeet(i, 18) || inTown(f.c[0], f.c[2], 30) || !world.isClear(f.c[0], f.c[2])) return false;
         const p = at(f, side * (hw + 9));
         return f.c[1] - world.baseHeight(p[0], p[2]) > 2.5;
       });

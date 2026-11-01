@@ -12,6 +12,9 @@ import { SPAWN, LANE_OFFSET, SEA_LEVEL } from "./world/layout.js";
 import { loadCar, loadCarLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
 import { CarDamage } from "./car/damage.js";
+import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
+import { planStations, buildStations, stationApproach } from "./world/stations.js";
+import { Fuel, Refuel, pumpSpotAt, FUEL_FLOOR } from "./fuel.js";
 import { ChaseCamera } from "./camera.js";
 import { Input } from "./input.js";
 import { Weather, WEATHERS } from "./weather.js";
@@ -19,7 +22,7 @@ import { GameAudio } from "./audio.js";
 import { Traffic } from "./traffic.js";
 import { People } from "./people.js";
 import { Navigator, AutoDriver } from "./navigation.js";
-import { renderMapImage, MiniMap, BigMap, PLACES } from "./map.js";
+import { renderMapImage, MiniMap, BigMap, PLACES, setFuelStations } from "./map.js";
 import { GARAGE, stats, applyPaint } from "./garage.js";
 import { DayNight, TIME_PRESETS } from "./daynight.js";
 import { NightLights } from "./nightlights.js";
@@ -86,6 +89,8 @@ async function start() {
   await nextFrame();
   const world = new World();
   const colliders = new Colliders();
+  // Fuel stations are planned before the ground is built, so it can be levelled under them.
+  const stations = planStations(world);
   setProgress(0.22, "Laying the land and sea…");
   await nextFrame();
   buildTerrain(scene, world);
@@ -95,6 +100,8 @@ async function start() {
   setProgress(0.36, "Building the towns…");
   const town = await buildTown(scene, world, colliders);
   const landmarks = buildLandmarks(scene, world, colliders);
+  const stationParts = buildStations(scene, world, colliders, stations);
+  town.lampSpots.push(...stationParts.lampSpots);
   setProgress(0.42, "Planting trees…");
   await nextFrame();
   const nature = buildNature(scene, world, colliders, preset);
@@ -107,11 +114,16 @@ async function start() {
   const vehicle = new Vehicle(car, world, colliders, carEntry.spec);
   const damage = new CarDamage(scene, car);
   vehicle.onImpact = (hit) => damage.hit(hit);
+  const fuel = new Fuel(settings.fuel);
+  fuel.electric = !!carEntry.electric;
+  fuel.auto = settings.fuelMode === "auto";
   vehicle.place(SPAWN.x, SPAWN.z, SPAWN.heading);
 
   setProgress(0.82, "Filling the roads…");
   const lod = await loadCarLod(scene);
+  const lights = new TrafficLights(scene, world, colliders);
   const traffic = new Traffic(scene, world, lod, preset);
+  traffic.lights = lights;
   const people = new People(scene, world, town.pavementSpots, preset, false);
 
   const chase = new ChaseCamera(scene, world, car, settings.cameraMode);
@@ -120,7 +132,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, lod]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, lod, ...lights.casters, ...stationParts.casters]) csm.addShadowCaster(m, false);
 
   // ---------- Camera effects ----------
   const pipeline = new DefaultRenderingPipeline("post", true, scene, [chase.camera]);
@@ -168,6 +180,7 @@ async function start() {
   // ---------- Map and self-driving ----------
   const navigator = new Navigator(world);
   const autodriver = new AutoDriver(world, navigator);
+  autodriver.lights = lights;
   const mapImage = renderMapImage(world);
   const minimap = new MiniMap($("minimap"), mapImage);
   let guide = null; // { route, name, progress }
@@ -209,7 +222,7 @@ async function start() {
     stickKnob: $("stick-knob"),
     gas: $("btn-gas"),
     brake: $("btn-brake"),
-    hand: $("btn-hand"),
+    reverse: $("btn-reverse"),
   });
   $("btn-camera").addEventListener("click", () => input.handlers.camera());
   $("btn-reset").addEventListener("click", () => mode === "drive" && resetCar());
@@ -220,6 +233,18 @@ async function start() {
     settings.hour = daynight.hour;
     saveSettings(settings);
     toast(next.name);
+  });
+  // Mute button (the same switch as Sound in Settings).
+  const setSound = (on) => {
+    settings.sound = on;
+    audio.setEnabled(on);
+    saveSettings(settings);
+    $("btn-sound").classList.toggle("muted", !on);
+  };
+  setSound(settings.sound);
+  $("btn-sound").addEventListener("click", () => {
+    setSound(!settings.sound);
+    toast(settings.sound ? "Sound on" : "Sound off");
   });
   $("btn-weather").addEventListener("click", () => {
     const w = weather.cycle();
@@ -234,13 +259,40 @@ async function start() {
     const foot = m === "foot";
     input.footMode = foot;
     $("hud").classList.toggle("hud-foot", foot);
+    $("hud").classList.toggle("hud-fuel", m === "fuel");
     // (An <svg> ignores the `hidden` property, so use display.)
-    $("wheel").style.display = foot ? "none" : "";
+    $("wheel").style.display = m === "drive" ? "" : "none";
     $("stick").hidden = !foot;
     people.player.hidden = !foot;
     chase._first = true;
   };
   let nearbyCar = null;
+  const refuel = new Refuel(scene, world, people);
+  $("btn-fuel").addEventListener("click", () => {
+    const at = pumpSpotAt(stations, vehicle);
+    if (!at || mode !== "drive") return;
+    if (fuel.level > 0.99) {
+      toast(fuel.electric ? "Already fully charged" : "Your tank is already full");
+      return;
+    }
+    autodriver.stop();
+    $("auto-chip").hidden = true;
+    setMode("fuel");
+    $("fuel-chip").hidden = false;
+    refuel.start({
+      station: at.station,
+      vehicle,
+      fuel,
+      onDone: () => {
+        $("fuel-chip").hidden = true;
+        setMode("drive");
+        settings.fuel = fuel.level;
+        saveSettings(settings);
+        toast(fuel.electric ? "Fully charged" : "Full tank");
+      },
+    });
+  });
+  $("btn-fuel-skip").addEventListener("click", () => refuel.skip());
   $("btn-action").addEventListener("click", () => {
     if (mode === "drive") {
       // Step out on the driver's side.
@@ -266,7 +318,10 @@ async function start() {
       damage.repair();
       paint = { colour: t.colour, metallic: 0.75, roughness: 0.22 };
       applyPaint(car, paint);
-      toast("New car — enjoy!");
+      // Someone else's car: some are electric, and the tank is part full.
+      fuel.electric = Math.random() < 0.3;
+      fuel.level = 0.35 + Math.random() * 0.6;
+      toast(fuel.electric ? "New car (electric) — enjoy!" : "New car — enjoy!");
     }
     setMode("drive");
   });
@@ -274,10 +329,12 @@ async function start() {
   // ---------- Big map ----------
   const mapPanel = $("map-panel");
   const bigmap = new BigMap($("bigmap"), mapImage, (x, z) => pickDestination(x, z, "Picked spot"));
-  function pickDestination(x, z, name) {
+  function pickDestination(x, z, name, station = null) {
     const p = playerPos();
-    const route = navigator.route(p.x, p.z, x, z);
+    const route = navigator.route(p.x, p.z, station ? station.ox : x, station ? station.oz : z);
     if (!route) return;
+    // To a fuel station: turn in and stop at a pump.
+    if (station) route.points = stationApproach(route.points, station);
     const end = route.points[route.points.length - 1];
     picked = { route, name, x: end.x, z: end.z };
     bigmap.route = route;
@@ -288,11 +345,29 @@ async function start() {
     $("btn-show-route").disabled = false;
     $("btn-clear-route").disabled = false;
   }
+  // Fuel stations: the nearest one, then each by name.
+  setFuelStations(stations);
+  const nearestStation = () => {
+    const p = playerPos();
+    return stations.reduce((best, s) => (!best || Math.hypot(s.x - p.x, s.z - p.z) < Math.hypot(best.x - p.x, best.z - p.z) ? s : best), null);
+  };
+  {
+    const b = document.createElement("button");
+    b.innerHTML = `Nearest fuel station<small>Fill up or charge</small>`;
+    b.addEventListener("click", () => {
+      const s = nearestStation();
+      if (!s) return;
+      pickDestination(s.x, s.z, s.name, s);
+      bigmap.centreOn(s.x, s.z);
+    });
+    $("places").appendChild(b);
+  }
+  for (const s of stations) PLACES.push({ name: s.name.replace("Fuel station · ", "Fuel · "), country: s.island.name, x: s.x, z: s.z, station: s });
   for (const p of PLACES) {
     const b = document.createElement("button");
     b.innerHTML = `${p.name}<small>${p.country}</small>`;
     b.addEventListener("click", () => {
-      pickDestination(p.x, p.z, p.name);
+      pickDestination(p.x, p.z, p.name, p.station ?? null);
       bigmap.centreOn(p.x, p.z);
     });
     $("places").appendChild(b);
@@ -355,7 +430,7 @@ async function start() {
       card.innerHTML = `
         <div class="swatch" style="background: linear-gradient(135deg, rgb(${r},${gg},${b}), rgb(${Math.round(r * 0.55)},${Math.round(gg * 0.55)},${Math.round(b * 0.55)}))"></div>
         <div class="name">${g.name}</div>
-        <div class="trim">${g.trim}</div>
+        <div class="trim">${g.trim} · ${g.electric ? "Electric" : "Petrol"}</div>
         ${["speed", "acceleration", "grip"].map((k) => `<div class="stat">${k[0].toUpperCase() + k.slice(1)}<span class="bar"><i style="width:${Math.round(s[k] * 100)}%"></i></span></div>`).join("")}`;
       card.addEventListener("click", () => {
         carEntry = g;
@@ -363,6 +438,8 @@ async function start() {
         applyPaint(car, paint);
         vehicle.setCar(car, g.spec);
         damage.repair();
+        fuel.electric = !!g.electric;
+        fuel.level = 1;
         settings.car = g.id;
         saveSettings(settings);
         renderGarage();
@@ -381,7 +458,7 @@ async function start() {
   const markSeg = (id, value) => {
     for (const b of $(id).querySelectorAll("button")) b.classList.toggle("on", b.dataset.v === value);
   };
-  for (const w of WEATHERS) {
+  for (const w of [{ id: "auto", name: "Auto" }, ...WEATHERS]) {
     const b = document.createElement("button");
     b.dataset.v = w.id;
     b.textContent = w.name;
@@ -391,9 +468,10 @@ async function start() {
   const refreshPanel = () => {
     markSeg("seg-graphics", settings.graphics);
     markSeg("seg-units", settings.units);
+    markSeg("seg-fuel", settings.fuelMode);
     markSeg("seg-fps", settings.showFps ? "on" : "off");
     markSeg("seg-sound", settings.sound ? "on" : "off");
-    markSeg("seg-weather", weather.target.id);
+    markSeg("seg-weather", weather.mode);
     $("graphics-note").textContent =
       settings.graphics === "auto" ? `Auto picked ${levelName(level)} for this device.` : "Changing this restarts the game.";
     $("unit").textContent = settings.units === "mph" ? "mph" : "km/h";
@@ -419,11 +497,12 @@ async function start() {
     setTimeout(() => location.reload(), 250);
   });
   onSeg("seg-units", (v) => (settings.units = v));
-  onSeg("seg-fps", (v) => (settings.showFps = v === "on"));
-  onSeg("seg-sound", (v) => {
-    settings.sound = v === "on";
-    audio.setEnabled(settings.sound);
+  onSeg("seg-fuel", (v) => {
+    settings.fuelMode = v;
+    fuel.auto = v === "auto";
   });
+  onSeg("seg-fps", (v) => (settings.showFps = v === "on"));
+  onSeg("seg-sound", (v) => setSound(v === "on"));
   onSeg("seg-weather", (v) => {
     weather.set(v);
     settings.weather = v;
@@ -503,6 +582,10 @@ async function start() {
       }
       vehicle.dynamic = [...dynamicCars, ...people.colliders()];
       vehicle.update(dt, controls);
+    } else if (mode === "fuel") {
+      vehicle.dynamic = dynamicCars;
+      vehicle.update(dt, IDLE);
+      refuel.update(dt);
     } else {
       vehicle.dynamic = dynamicCars;
       vehicle.update(dt, IDLE);
@@ -514,10 +597,14 @@ async function start() {
       nearbyCar = Math.hypot(vehicle.x - p.x, vehicle.z - p.z) < 3.8 ? "own" : t;
     }
     const me = playerPos();
-    traffic.update(dt, mode === "drive" ? vehicle : people.player, chase.camera);
+    traffic.update(dt, mode === "foot" ? people.player : vehicle, chase.camera);
+    const fuelWarning = fuel.update(dt, vehicle, mode === "drive");
+    if (fuelWarning) toast(fuelWarning);
     people.update(dt, mode === "drive" ? vehicle : null);
     people.draw();
     weather.update(dt, chase.camera, vehicle);
+    lights.update(dt);
+    if (mode === "drive" && lights.ranRed(vehicle.x, vehicle.z, vehicle.vx, vehicle.vz)) toast("You went through a red light!");
     daynight.update(dt);
     damage.update(dt, vehicle, daynight.night);
     nightLights.update(daynight.night, mode === "drive" && vehicle.forwardSpeed > 0.5 && (autodriver.active ? false : input.brake > 0), me, traffic.cars);
@@ -526,6 +613,7 @@ async function start() {
     if (saveTimer <= 0) {
       saveTimer = 20;
       settings.hour = daynight.hour;
+      settings.fuel = fuel.level;
       saveSettings(settings);
     }
 
@@ -600,12 +688,17 @@ async function start() {
 
   let fpsTimer = 0;
   let shownSpeed = -1;
+  let shownLimit = -1;
+  let shownFuel = -1;
+  let shownElectric = null;
+  let shownOver = false;
   engine.runRenderLoop(() => {
     const dt = Math.min(engine.getDeltaTime() / 1000, 0.1);
     const paused = anyPanelOpen();
     audio.setPaused(paused);
     if (!paused) tick(dt);
     if (mode === "drive") chase.update(dt, vehicle);
+    else if (mode === "fuel") refuel.camera(chase.camera);
     else chase.followPerson(dt, people.player);
 
     const me = playerPos();
@@ -617,9 +710,37 @@ async function start() {
       shownSpeed = speed;
       $("speed").textContent = speed;
     }
+    // Speed limit sign, in the same units as the speed; the speed turns red when over.
+    const limitKmh = speedLimitAt(vehicle.x, vehicle.z);
+    const limit = settings.units === "mph" ? Math.round((limitKmh * 0.621371) / 5) * 5 : limitKmh;
+    if (limit !== shownLimit) {
+      shownLimit = limit;
+      $("limit-num").textContent = limit;
+    }
+    const over = speed > limit;
+    if (over !== shownOver) {
+      shownOver = over;
+      $("speedo").classList.toggle("over", over);
+    }
+    // Fuel gauge, and the Fill up button when you're stopped at a pump.
+    const fuelPct = Math.round(fuel.level * 100);
+    if (fuelPct !== shownFuel || fuel.electric !== shownElectric) {
+      shownFuel = fuelPct;
+      shownElectric = fuel.electric;
+      $("fuel-fill").style.width = `${fuelPct}%`;
+      const gauge = $("fuel");
+      gauge.classList.toggle("electric", fuel.electric);
+      gauge.classList.toggle("low", fuel.level <= 0.2);
+      gauge.classList.toggle("empty", fuel.level <= FUEL_FLOOR + 0.001);
+    }
+    if (mode === "fuel") $("fuel-text").textContent = refuel.status;
+    const fuelBtn = $("btn-fuel");
+    fuelBtn.hidden = !(mode === "drive" && vehicle.speed < 0.8 && !autodriver.active && pumpSpotAt(stations, vehicle));
+    if (!fuelBtn.hidden) fuelBtn.textContent = fuel.electric ? "Charge" : "Fill up";
     // Get out (when stopped) / Get in (next to a car).
     const action = $("btn-action");
-    if (mode === "drive") {
+    if (mode === "fuel") action.hidden = true;
+    else if (mode === "drive") {
       action.hidden = vehicle.speed > 2 || autodriver.active;
       action.textContent = "Get out";
     } else {
@@ -641,6 +762,7 @@ async function start() {
       for (let i = 0; i < frames; i++) {
         tick(dt);
         if (mode === "drive") chase.update(dt, vehicle);
+        else if (mode === "fuel") refuel.camera(chase.camera);
         else chase.followPerson(dt, people.player);
       }
       scene.render();
@@ -652,7 +774,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, setMode, get mode() { return mode; }, pickDestination };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, setMode, get mode() { return mode; }, pickDestination };
   }
 }
 

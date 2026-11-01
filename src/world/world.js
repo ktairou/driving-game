@@ -16,6 +16,11 @@ export class World {
     this.slabs = []; // raised flat areas such as pavements, added by the towns
   }
 
+  // Places kept free of trees and rocks (fuel stations).
+  isClear(x, z) {
+    return !this.clearAreas?.some((a) => Math.abs(x - a.x) < a.r && Math.abs(z - a.z) < a.r && Math.hypot(x - a.x, z - a.z) < a.r);
+  }
+
   // A raised flat area (a pavement): its top counts as the ground.
   addSlab(x0, x1, z0, z1, top) {
     this.slabs.push({ x0, x1, z0, z1, top });
