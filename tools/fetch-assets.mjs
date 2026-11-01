@@ -196,6 +196,8 @@ async function main() {
   await phTexture("white_plaster_02", "1k", "plaster");
   await phTexture("red_brick_03", "1k", "brick");
   await phTexture("bark_brown_02", "1k", "bark");
+  await phTexture("coast_sand_01", "1k", "sand");
+  await phTexture("sandstone_blocks_04", "1k", "sandstone");
 
   // Foliage atlases for card trees (CC0, Poly Haven)
   await phLeafAtlas("jacaranda_tree", "leaves_diff", "leaves_alpha", "leaves_broad");

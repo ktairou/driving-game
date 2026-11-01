@@ -18,11 +18,25 @@
     <canvas id="game"></canvas>
 
     <div id="hud" hidden>
-      <div id="fps" class="fps"></div>
+      <div class="top-left">
+        <canvas id="minimap" aria-label="Map — tap to open"></canvas>
+        <div id="fps" class="fps"></div>
+      </div>
+
+      <div id="auto-chip" class="chip" hidden>
+        <span id="auto-text">Self-driving</span>
+        <button id="btn-auto-stop">Stop</button>
+      </div>
 
       <div class="top-buttons">
         <button id="btn-camera" class="round" aria-label="Change camera">
           <svg viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="13" r="3.6" /></svg>
+        </button>
+        <button id="btn-weather" class="round" aria-label="Change weather">
+          <svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z" /><path d="M9 21l1-1.6M13 21l1-1.6" /></svg>
+        </button>
+        <button id="btn-garage" class="round" aria-label="Choose a car">
+          <svg viewBox="0 0 24 24"><path d="M4 15.5v-3l2-4.5h12l2 4.5v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" /><path d="M4 12.5h16" /><circle cx="7.5" cy="16.5" r="1.6" /><circle cx="16.5" cy="16.5" r="1.6" /></svg>
         </button>
         <button id="btn-reset" class="round" aria-label="Put car back on the road">
           <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4.5h4.5" /></svg>
@@ -40,6 +54,7 @@
           <circle class="wheel-hub" cx="100" cy="104" r="26" />
           <rect class="wheel-mark" x="94" y="9" width="12" height="18" rx="4" />
         </svg>
+        <div id="stick" hidden><div id="stick-knob"></div></div>
       </div>
 
       <div class="pedals">
@@ -48,12 +63,42 @@
         <button id="btn-gas" class="pedal gas">GAS</button>
       </div>
 
+      <button id="btn-action" class="action" hidden>Get out</button>
+
       <div class="speedo">
         <span id="speed">0</span>
         <span id="unit">mph</span>
       </div>
 
       <div id="toast" class="toast"></div>
+    </div>
+
+    <div id="map-panel" class="panel map-panel" hidden>
+      <canvas id="bigmap"></canvas>
+      <div class="map-side">
+        <h2>Map</h2>
+        <p class="note">Tap the map to pick a place, or choose one below.</p>
+        <div id="places" class="places"></div>
+        <p id="route-info" class="route-info"></p>
+        <button id="btn-drive-there" class="primary" disabled>Drive me there</button>
+        <button id="btn-show-route" class="secondary" disabled>Just show the way</button>
+        <button id="btn-clear-route" class="secondary" disabled>Clear route</button>
+        <div class="map-zoom">
+          <button id="btn-zoom-out" aria-label="Zoom out">−</button>
+          <button id="btn-zoom-in" aria-label="Zoom in">+</button>
+          <button id="btn-zoom-me" aria-label="Show where I am">Me</button>
+        </div>
+        <button id="btn-map-close" class="close">Back to driving</button>
+      </div>
+    </div>
+
+    <div id="garage-panel" class="panel" hidden>
+      <div class="panel-card garage-card">
+        <h2>Choose your car</h2>
+        <p class="note">More realistic cars can be added later.</p>
+        <div id="garage-list" class="garage-list"></div>
+        <button id="btn-garage-close" class="close">Back to driving</button>
+      </div>
     </div>
 
     <div id="settings" class="panel" hidden>
@@ -77,6 +122,17 @@
           </div>
         </div>
         <div class="row">
+          <div class="label">Sound</div>
+          <div class="seg" id="seg-sound">
+            <button data-v="on">On</button>
+            <button data-v="off">Off</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">Weather</div>
+          <div class="seg seg-wrap" id="seg-weather"></div>
+        </div>
+        <div class="row">
           <div class="label">Frame rate counter</div>
           <div class="seg" id="seg-fps">
             <button data-v="on">On</button>
@@ -86,7 +142,8 @@
         <details class="credits">
           <summary>Credits</summary>
           <p>Car: "Car Concept" by Eric Chadwick, &copy; 2024 Darmstadt Graphics Group GmbH, from the Khronos glTF Sample Assets. Licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Logos removed and number plate changed.</p>
-          <p>Sky, ground, road, wall, bark and leaf textures from <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0).</p>
+          <p>Sky, ground, sand, road, wall, stone, bark and leaf textures from <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0).</p>
+          <p>Landmarks, towns, people and all sounds are made by the game itself.</p>
           <p>Made with <a href="https://www.babylonjs.com" target="_blank" rel="noopener">Babylon.js</a>.</p>
         </details>
         <button id="btn-close" class="close">Back to driving</button>

@@ -68,10 +68,90 @@ button {
   pointer-events: auto;
 }
 
-.fps {
+.top-left {
   position: absolute;
   top: calc(10px + var(--safe-t));
-  left: calc(14px + var(--safe-l));
+  left: calc(12px + var(--safe-l));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+#minimap {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.chip {
+  position: absolute;
+  top: calc(12px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px 7px 16px;
+  border-radius: 999px;
+  background: rgba(20, 70, 160, 0.82);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip button {
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #f3f5f7;
+  color: #11161d;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.action {
+  position: absolute;
+  left: 50%;
+  bottom: calc(92px + var(--safe-b));
+  transform: translateX(-50%);
+  padding: 12px 26px;
+  border-radius: 999px;
+  background: #f3f5f7;
+  color: #11161d;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+#stick {
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: var(--glass);
+  border: 2px solid var(--line);
+  position: relative;
+}
+
+#stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.hud-foot .pedals,
+.hud-foot .speedo {
+  display: none;
+}
+
+.fps {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
@@ -372,6 +452,173 @@ button {
   color: #11161d;
   font-weight: 700;
   font-size: 16px;
+}
+
+.seg-wrap {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 330px;
+}
+
+/* ---------- Map ---------- */
+.map-panel {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  place-items: stretch;
+  background: #0d1117;
+}
+
+.map-panel[hidden] {
+  display: none !important;
+}
+
+#bigmap {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.map-side {
+  padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b)) 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  background: #151b23;
+}
+
+.map-side h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.places button {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 13px;
+  text-align: left;
+}
+
+.places button small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.route-info {
+  min-height: 1.2em;
+  font-size: 14px;
+  margin: 4px 0;
+}
+
+.primary,
+.secondary {
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.primary {
+  background: #2f8cff;
+}
+
+.secondary {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.35;
+}
+
+.map-zoom {
+  display: flex;
+  gap: 6px;
+}
+
+.map-zoom button {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.map-side .close {
+  margin-top: auto;
+}
+
+/* ---------- Garage ---------- */
+.garage-card {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.garage-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.car-card {
+  text-align: left;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid transparent;
+}
+
+.car-card.on {
+  border-color: #f3f5f7;
+}
+
+.car-card .swatch {
+  width: 100%;
+  height: 34px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.car-card .name {
+  font-weight: 700;
+}
+
+.car-card .trim {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.stat {
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  align-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.stat .bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.stat .bar i {
+  display: block;
+  height: 100%;
+  background: #f3f5f7;
+  border-radius: 3px;
 }
 
 .screen {

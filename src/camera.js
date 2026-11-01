@@ -1,5 +1,6 @@
 import { FreeCamera, Vector3 } from "@babylonjs/core";
 import { clamp, lerp } from "./noise.js";
+import { SEA_LEVEL } from "./world/layout.js";
 
 // Camera views, in the order the camera button cycles through them.
 // "attached" views ride with the car body; positions are in car space
@@ -17,8 +18,8 @@ const tmp = new Vector3();
 const tmpLook = new Vector3();
 
 export class ChaseCamera {
-  constructor(scene, hf, car, mode = 0) {
-    this.hf = hf;
+  constructor(scene, world, car, mode = 0) {
+    this.world = world;
     this.car = car;
     this.camera = new FreeCamera("cam", new Vector3(0, 10, -10), scene);
     this.camera.minZ = 0.1;
@@ -31,7 +32,14 @@ export class ChaseCamera {
     this.dirZ = 1;
     this.shake = 0;
     this.tv = null;
+    this.footYaw = 0;
     this._first = true;
+  }
+
+  // Which way the camera faces on the ground (for the on-foot joystick).
+  get yaw() {
+    const f = this.camera.getForwardRay(1).direction;
+    return Math.atan2(f.x, f.z);
   }
 
   get modeName() {
@@ -56,6 +64,31 @@ export class ChaseCamera {
       const fovT = clamp(v.speed / 55, 0, 1);
       cam.fov = lerp(cam.fov, lerp(m.fov[0], m.fov[1], fovT), this._first ? 1 : 1 - Math.exp(-dt * 3));
     }
+    this._first = false;
+  }
+
+  // On foot: a little way behind and above you, turning slowly to follow.
+  followPerson(dt, p) {
+    const cam = this.camera;
+    cam.minZ = 0.1;
+    const k = this._first ? 1 : 1 - Math.exp(-dt * (p.speed > 0.2 ? 2.5 : 0.6));
+    const want = p.heading;
+    let d = want - this.footYaw;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    // Only swing round when walking forwards-ish, so walking toward the camera works.
+    if (Math.abs(d) < 2.2 || this._first) this.footYaw += d * k;
+    const dist = 4.4;
+    const tx = p.x - Math.sin(this.footYaw) * dist;
+    const tz = p.z - Math.cos(this.footYaw) * dist;
+    const ty = Math.max(this.world.getHeight(tx, tz), SEA_LEVEL) + 0.6;
+    const want3 = tmp.set(tx, Math.max(p.y + 2.0, ty), tz);
+    if (this._first) this.pos.copyFrom(want3);
+    else this.pos = Vector3.Lerp(this.pos, want3, 1 - Math.exp(-dt * 6));
+    cam.position.copyFrom(this.pos);
+    this.target.set(p.x, p.y + 1.45, p.z);
+    cam.setTarget(this.target);
+    cam.fov = lerp(cam.fov, 0.95, this._first ? 1 : 0.1);
     this._first = false;
   }
 
@@ -95,7 +128,7 @@ export class ChaseCamera {
 
     const dist = m.dist + clamp(speed / 50, 0, 1) * 1.2;
     const want = tmp.set(v.x - ux * dist, v.y + m.height, v.z - uz * dist);
-    const ground = this.hf.getHeight(want.x, want.z) + 0.7;
+    const ground = Math.max(this.world.getHeight(want.x, want.z), SEA_LEVEL) + 0.7;
     if (want.y < ground) want.y = ground;
     if (this._first) this.pos.copyFrom(want);
     else {
@@ -130,21 +163,21 @@ export class ChaseCamera {
   }
 
   _pickTvSpot(v) {
-    const hf = this.hf;
-    const pts = hf.road.points;
-    const n = pts.length;
-    const i = hf.nearestRoadSample(v.x, v.z);
+    const world = this.world;
+    const { road, index: i } = world.network.nearest(v.x, v.z);
+    const n = road.count;
     // Which way along the road is the car heading?
-    const t = hf.road.tangents[i];
+    const t = road.tangents[i];
     const dir = t[0] * Math.sin(v.heading) + t[1] * Math.cos(v.heading) >= 0 ? 1 : -1;
-    const ahead = (i + dir * (35 + Math.round(Math.random() * 20)) + n * 4) % n;
-    const [px, pz] = pts[ahead];
-    const [tx, tz] = hf.road.tangents[ahead];
+    let ahead = i + dir * (35 + Math.round(Math.random() * 20));
+    ahead = road.closed ? ((ahead % n) + n) % n : clamp(ahead, 0, n - 1);
+    const [px, pz] = road.points[ahead];
+    const [tx, tz] = road.tangents[ahead];
     const side = Math.random() < 0.5 ? -1 : 1;
     const off = 9 + Math.random() * 6;
     const x = px + tz * side * off;
     const z = pz - tx * side * off;
-    const y = Math.max(hf.getHeight(x, z), hf.road.heights[ahead]) + 1.6 + Math.random() * 2.5;
+    const y = Math.max(world.getHeight(x, z), road.heights[ahead], SEA_LEVEL) + 1.6 + Math.random() * 2.5;
     return { x, y, z };
   }
 }

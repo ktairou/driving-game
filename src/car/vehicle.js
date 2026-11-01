@@ -1,7 +1,7 @@
 import { Quaternion } from "@babylonjs/core";
 import { clamp, lerp } from "../noise.js";
 import { WHEEL_RADIUS } from "./carModel.js";
-import { PLAY_HALF } from "../world/layout.js";
+import { WORLD_LIMIT, SEA_LEVEL } from "../world/layout.js";
 
 const G = 9.81;
 const STEP = 1 / 120;
@@ -9,29 +9,17 @@ const STEP = 1 / 120;
 // Arcade-leaning car physics: a "bicycle model" with tyre slip for the flat
 // movement, and the ground height under the four wheels for the up/down part.
 export class Vehicle {
-  constructor(car, hf, colliders) {
-    this.car = car;
-    this.hf = hf;
+  constructor(car, world, colliders, spec = {}) {
+    this.world = world;
     this.colliders = colliders;
-
-    const g = car.geometry;
-    this.a = g.frontZ; // CG to front axle
-    this.b = -g.rearZ; // CG to rear axle
-    this.L = this.a + this.b;
-    this.halfTrack = g.halfTrack;
-
-    this.mass = 1350;
-    this.inertia = 2300;
-    this.cgHeight = 0.5;
-    this.power = 300000; // W
-    this.maxDrive = 10500; // N
-    this.brakeForce = 15000;
-    this.reverseForce = 4200;
-    this.drag = 0.42;
-    this.rolling = 32;
-    this.corneringFront = 95000;
-    this.corneringRear = 102000;
-    this.grip = 1.15;
+    this.gripScale = 1; // weather: lower on wet or snowy roads
+    this.inWater = false;
+    this.rpm = 900;
+    this.gear = 1;
+    this.slip = 0; // how hard the tyres are sliding, for the squeal sound
+    this.dynamic = []; // moving things to bump into, refreshed every frame
+    this.onBump = null;
+    this.setCar(car, spec);
 
     this.x = 0;
     this.z = 0;
@@ -58,6 +46,34 @@ export class Vehicle {
     this.forwardSpeed = 0;
   }
 
+  // Swap in a (possibly different) car model and its handling numbers.
+  setCar(car, spec = {}) {
+    this.car = car;
+    const g = car.geometry;
+    this.a = g.frontZ; // CG to front axle
+    this.b = -g.rearZ; // CG to rear axle
+    this.L = this.a + this.b;
+    this.halfTrack = g.halfTrack;
+    this.mass = spec.mass ?? 1350;
+    this.inertia = this.mass * 1.7;
+    this.cgHeight = 0.5;
+    this.power = spec.power ?? 300000; // W
+    this.maxDrive = spec.maxDrive ?? 10500; // N
+    this.brakeForce = 15000 * (this.mass / 1350);
+    this.reverseForce = 4200 * (this.mass / 1350);
+    this.drag = spec.drag ?? 0.42;
+    this.rolling = 32;
+    this.corneringFront = 95000 * (this.mass / 1350);
+    this.corneringRear = 102000 * (this.mass / 1350);
+    this.baseGrip = spec.grip ?? 1.15;
+    this.redline = spec.redline ?? 7800;
+    this.gears = spec.gears ?? [3.2, 2.2, 1.65, 1.3, 1.05, 0.86];
+  }
+
+  get grip() {
+    return this.baseGrip * this.gripScale;
+  }
+
   place(x, z, heading) {
     this.x = x;
     this.z = z;
@@ -65,7 +81,7 @@ export class Vehicle {
     this.vx = this.vz = this.vy = 0;
     this.yawRate = 0;
     this.steer = 0;
-    this.y = this.hf.getHeight(x, z);
+    this.y = this.world.getHeight(x, z);
     this.grounded = true;
     this._updateTilt(true);
     this.sync();
@@ -79,7 +95,7 @@ export class Vehicle {
       // forward = (s, c), right = (c, -s)
       const x = this.x + s * lz + c * lx;
       const z = this.z + c * lz - s * lx;
-      pts.push(this.hf.getHeight(x, z));
+      pts.push(this.world.getHeight(x, z));
     }
     return pts; // FL, FR, RL, RR
   }
@@ -158,6 +174,7 @@ export class Vehicle {
     // --- Tyres ----------------------------------------------------------------------
     let fLat = 0;
     let torque = 0;
+    let slipAmount = 0;
     if (this.grounded) {
       const weight = this.mass * G;
       const transfer = (this.cgHeight / this.L) * this.mass * this.accLong;
@@ -173,7 +190,9 @@ export class Vehicle {
       fLat = fyF * Math.cos(this.steer) + fyR;
       fLong += -fyF * Math.sin(this.steer);
       torque = this.a * fyF * Math.cos(this.steer) - this.b * fyR;
+      slipAmount = speed > 3 ? Math.max(Math.abs(slipF), Math.abs(slipR)) + (handbrake ? 0.15 : 0) + (brake > 0 && speed > 12 ? 0.05 : 0) : 0;
     }
+    this.slip = lerp(this.slip, slipAmount, 0.2);
 
     // Slow speeds: the slip model gets twitchy, so steer "on rails" instead.
     const lowSpeed = clamp(1 - speed / 5, 0, 1);
@@ -203,7 +222,7 @@ export class Vehicle {
 
     // Gravity pulls you down hills (but a stopped car stays parked).
     if (this.grounded && !(throttle === 0 && pedalBrake === 0 && speed < 1.5)) {
-      const n = this.hf.getNormal(this.x, this.z, 1.5);
+      const n = this.world.getNormal(this.x, this.z, 1.5);
       this.vx += n[0] * G * n[1] * dt;
       this.vz += n[2] * G * n[1] * dt;
     }
@@ -213,7 +232,7 @@ export class Vehicle {
 
     // Cliffs and steep cuttings act like walls.
     if (this.grounded) {
-      const n = this.hf.getNormal(this.x, this.z, 1.5);
+      const n = this.world.getNormal(this.x, this.z, 1.5);
       if (n[1] < 0.66) {
         const h = Math.hypot(n[0], n[2]) || 1;
         const ox = n[0] / h;
@@ -260,6 +279,24 @@ export class Vehicle {
       }
     }
 
+    // Fell off a bridge or drove into the sea.
+    this.inWater = this.y < SEA_LEVEL - 0.7 && ground < SEA_LEVEL;
+    if (this.inWater) {
+      this.vx *= 0.96;
+      this.vz *= 0.96;
+    }
+
+    // --- Engine revs (for the sound): a simple automatic gearbox -------------
+    const wheelRpm = (Math.abs(vLong) / WHEEL_RADIUS) * 9.549;
+    const finalDrive = 3.4;
+    let geared = wheelRpm * this.gears[this.gear - 1] * finalDrive;
+    if (geared > this.redline * 0.9 && this.gear < this.gears.length) this.gear++;
+    else if (this.gear > 1 && wheelRpm * this.gears[this.gear - 2] * finalDrive < this.redline * 0.62) this.gear--;
+    geared = wheelRpm * this.gears[this.gear - 1] * finalDrive;
+    const free = 900 + throttle * (this.grounded ? 1400 : 4000); // revs when slow / in the air
+    this.rpm = lerp(this.rpm, clamp(Math.max(geared, free), 800, this.redline), 0.12);
+    this.throttle = throttle;
+
     // --- Body lean (springy) ------------------------------------------------------
     const pitchTarget = clamp(-this.accLong * 0.006, -0.06, 0.06);
     const rollTarget = clamp(this.accLat * 0.006, -0.07, 0.07);
@@ -275,7 +312,7 @@ export class Vehicle {
 
   _collide() {
     // Edge of the world.
-    const lim = PLAY_HALF;
+    const lim = WORLD_LIMIT;
     if (Math.abs(this.x) > lim) {
       this.x = Math.sign(this.x) * lim;
       this.vx *= -0.3;
@@ -291,7 +328,21 @@ export class Vehicle {
     for (const off of [this.a - 0.15, 0, -this.b + 0.1]) {
       const cx = this.x + s * off;
       const cz = this.z + c * off;
-      const hit = this.colliders.resolveCircle(cx, cz, radius);
+      let hit = this.colliders.resolveCircle(cx, cz, radius);
+      // Moving things: other cars and people.
+      for (const o of this.dynamic) {
+        const hx = hit ? hit.x : cx;
+        const hz = hit ? hit.z : cz;
+        const dx = hx - o.x;
+        const dz = hz - o.z;
+        const d = Math.hypot(dx, dz);
+        const min = radius + o.r;
+        if (d < min && d > 1e-4) {
+          const depth = min - d;
+          hit = { x: hx + (dx / d) * depth, z: hz + (dz / d) * depth, nx: dx / d, nz: dz / d, depth };
+          this.onBump?.(o, Math.hypot(this.vx, this.vz));
+        }
+      }
       if (!hit) continue;
       this.x += hit.x - cx;
       this.z += hit.z - cz;

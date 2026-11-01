@@ -3,9 +3,9 @@ import { GeometryBuilder, normalize, cross, add, sub, scale } from "../geom.js";
 import { mulberry32, createNoise2D, fbm, smoothstep } from "../noise.js";
 import { loadTexture, surfaceMaterial, rgb } from "./materials.js";
 import { inTown } from "./road.js";
-import { ROAD_HALF_WIDTH, PLAY_HALF } from "./layout.js";
+import { ROAD_HALF_WIDTH, ISLANDS } from "./layout.js";
 
-const SECTOR = 400; // trees are grouped in 400 m squares so off-screen groups are skipped
+const SECTOR = 900; // trees are grouped in 900 m squares so off-screen groups are skipped
 
 // Image rectangles (pixels, 1024 atlas) of single sprigs in the leaf atlases.
 // `stem` says which end of the rectangle the stem is on.
@@ -160,36 +160,46 @@ function instanceBySector(template, items, makeMatrix, withColor) {
   return meshes;
 }
 
-export function buildNature(scene, hf, colliders, quality) {
+export function buildNature(scene, world, colliders, quality) {
   const rand = mulberry32(4242);
   const forest = createNoise2D(77);
 
-  // --- Pick spots ------------------------------------------------------------
-  const spots = [];
-  const spacing = 11;
-  for (let z = -PLAY_HALF; z < PLAY_HALF; z += spacing) {
-    for (let x = -PLAY_HALF; x < PLAY_HALF; x += spacing) {
-      const px = x + (rand() - 0.5) * spacing * 0.9;
-      const pz = z + (rand() - 0.5) * spacing * 0.9;
-      const density = fbm(forest, px / 260, pz / 260, 3) * 0.5 + 0.5;
-      if (rand() > smoothstep(0.42, 0.7, density)) continue;
-      if (hf.getRoadDistance(px, pz) < ROAD_HALF_WIDTH + 7) continue;
-      if (inTown(px, pz, 12)) continue;
-      const n = hf.getNormal(px, pz, 2);
-      if (n[1] < 0.84) continue;
-      spots.push({ x: px, z: pz, y: hf.getHeight(px, pz), r: rand() });
+  // --- Pick spots, island by island ---------------------------------------------
+  const totalShare = ISLANDS.reduce((s, i) => s + i.trees.share, 0);
+  const awayFromLandmarks = (x, z) => ISLANDS.every((isl) => isl.landmarks.every((lm) => Math.hypot(x - lm.x, z - lm.z) > (lm.base ?? 30) / 2 + 20));
+  const chosen = [];
+  for (const island of world.islands) {
+    const def = island.def;
+    const spots = [];
+    const spacing = 11;
+    const lim = def.coast - 40;
+    for (let z = def.cz - lim; z < def.cz + lim; z += spacing) {
+      for (let x = def.cx - lim; x < def.cx + lim; x += spacing) {
+        const px = x + (rand() - 0.5) * spacing * 0.9;
+        const pz = z + (rand() - 0.5) * spacing * 0.9;
+        const density = fbm(forest, px / 260, pz / 260, 3) * 0.5 + 0.5;
+        if (rand() > smoothstep(0.42, 0.7, density)) continue;
+        // Keep trunks and branches well clear of every road.
+        if (world.getRoadDistance(px, pz) < ROAD_HALF_WIDTH + 10) continue;
+        if (inTown(px, pz, 12) || !awayFromLandmarks(px, pz)) continue;
+        const y = world.getHeight(px, pz);
+        if (y < 4) continue; // beach or water
+        const n = world.getNormal(px, pz, 2);
+        if (n[1] < 0.84) continue;
+        spots.push({ x: px, z: pz, y, r: rand(), firAbove: def.trees.firAbove });
+      }
     }
+    // Shuffle then keep this island's share of the quality level's tree count.
+    for (let i = spots.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [spots[i], spots[j]] = [spots[j], spots[i]];
+    }
+    chosen.push(...spots.slice(0, Math.round((quality.trees * def.trees.share) / totalShare)));
   }
-  // Shuffle then keep as many as this quality level allows.
-  for (let i = spots.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [spots[i], spots[j]] = [spots[j], spots[i]];
-  }
-  const chosen = spots.slice(0, quality.trees);
   const broad = [];
   const firs = [];
   for (const s of chosen) {
-    const isFir = s.y > 30 || (s.y > 14 && s.r < 0.45);
+    const isFir = s.y > s.firAbove || (s.y > s.firAbove * 0.5 && s.r < 0.45);
     const scl = (isFir ? 0.8 : 0.75) + rand() * 0.55;
     const tint = 0.82 + rand() * 0.3;
     const item = { x: s.x, z: s.z, y: s.y, s: scl, yaw: rand() * Math.PI * 2, color: [tint * (0.92 + rand() * 0.12), tint, tint * (0.85 + rand() * 0.1), 1] };
@@ -247,19 +257,28 @@ export function buildNature(scene, hf, colliders, quality) {
   });
   const rockItems = [[], [], []];
   let placed = 0;
-  for (let tries = 0; tries < quality.rocks * 12 && placed < quality.rocks; tries++) {
-    const x = (rand() * 2 - 1) * PLAY_HALF;
-    const z = (rand() * 2 - 1) * PLAY_HALF;
-    const d = hf.getRoadDistance(x, z);
-    if (d < ROAD_HALF_WIDTH + 3 || inTown(x, z, 5)) continue;
-    const n = hf.getNormal(x, z, 2);
-    // Rocks like slopes and road cuttings.
-    if (n[1] > 0.93 && rand() > 0.15) continue;
-    const s = 0.5 + Math.pow(rand(), 2) * 3.2;
-    const it = { x, z, y: hf.getHeight(x, z) - s * 0.35, s, yaw: rand() * Math.PI * 2, tilt: (rand() - 0.5) * 0.4 };
-    rockItems[placed % 3].push(it);
-    if (s > 1.1) colliders.addCircle(x, z, s * 1.0);
-    placed++;
+  for (const island of world.islands) {
+    const def = island.def;
+    // Deserts get a bigger share of rocks to make up for having few trees.
+    const want = Math.round((quality.rocks / ISLANDS.length) * (def.climate === "desert" ? 1.8 : 0.9));
+    let made = 0;
+    for (let tries = 0; tries < want * 14 && made < want; tries++) {
+      const x = def.cx + (rand() * 2 - 1) * (def.coast - 40);
+      const z = def.cz + (rand() * 2 - 1) * (def.coast - 40);
+      const d = world.getRoadDistance(x, z);
+      const s = 0.5 + Math.pow(rand(), 2) * 3.2;
+      if (d < ROAD_HALF_WIDTH + 4 + s * 1.4 || inTown(x, z, 5) || !awayFromLandmarks(x, z)) continue;
+      const y = world.getHeight(x, z);
+      if (y < 1) continue;
+      const n = world.getNormal(x, z, 2);
+      // Rocks like slopes and road cuttings (and open desert).
+      if (n[1] > 0.93 && rand() > (def.climate === "desert" ? 0.5 : 0.15)) continue;
+      const it = { x, z, y: y - s * 0.35, s, yaw: rand() * Math.PI * 2, tilt: (rand() - 0.5) * 0.4 };
+      rockItems[placed % 3].push(it);
+      if (s > 1.1) colliders.addCircle(x, z, s * 1.0);
+      placed++;
+      made++;
+    }
   }
   const rockMatrix = (it) =>
     Matrix.Compose(new Vector3(it.s, it.s, it.s), Quaternion.RotationYawPitchRoll(it.yaw, it.tilt, it.tilt * 0.5), new Vector3(it.x, it.y, it.z));

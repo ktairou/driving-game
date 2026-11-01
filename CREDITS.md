@@ -7,8 +7,10 @@
 Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 Changes: the Khronos and 3D Commerce logos were removed and the number plate
-was replaced. The file in `public/assets/car/` is the original model; the
-changes are made when the game loads it.
+was replaced. `public/assets/car/concept_car.glb` is the original model; the
+changes are made when the game loads it. `concept_car_lod.glb` is a simplified
+copy (no interior, fewer triangles, smaller textures) made by
+`tools/make-lod.mjs` for traffic and parked cars.
 
 ## Sky and surfaces
 
@@ -21,7 +23,14 @@ From [Poly Haven](https://polyhaven.com), all CC0 (public domain):
 - Pavement and roofs: square_concrete_pavers
 - Walls: white_plaster_02, red_brick_03
 - Bark: bark_brown_02
+- Sand and beaches: coast_sand_01
+- Pyramids and clock tower: sandstone_blocks_04
 - Leaves: from the jacaranda_tree and fir_tree_01 models
+
+## Made by the game itself
+
+The landmarks, town buildings, people, bridges, sea ripples and all sounds
+are generated in code; there are no outside files for them.
 
 ## Engine
 

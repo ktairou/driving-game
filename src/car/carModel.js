@@ -1,4 +1,4 @@
-import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer, Quaternion } from "@babylonjs/core";
+import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer, Quaternion, Matrix } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 
 export const WHEEL_RADIUS = 0.38;
@@ -49,6 +49,76 @@ function mergeParts(parts, multiMaterial) {
   return merged;
 }
 
+// The model's front wheels were saved turned ~30 degrees (a steering pose),
+// so their axle isn't square to the car. Spinning them like that makes them
+// wobble. Measure the axle (the wheel's local X) and return a matrix that
+// squares it up around the wheel centre `p`.
+function axleFix(node, p) {
+  const axle = Vector3.TransformNormal(Vector3.Right(), node.computeWorldMatrix(true)).normalize();
+  const square = Quaternion.Identity();
+  Quaternion.FromUnitVectorsToRef(axle, axle.x >= 0 ? Vector3.Right() : Vector3.Left(), square);
+  return Matrix.Translation(-p.x, -p.y, -p.z).multiply(Matrix.FromQuaternionToRef(square, new Matrix())).multiply(Matrix.Translation(p.x, p.y, p.z));
+}
+
+function fixMaterials(scene, materials, plate = true) {
+  const license = [...materials].find((m) => m.name === "License");
+  const logoTexture = license?.albedoTexture;
+  for (const m of materials) {
+    if (!(m instanceof PBRMaterial)) continue;
+    // The sample model carries the Khronos logo on its plate, rims and calipers.
+    if (logoTexture && m.emissiveTexture === logoTexture) {
+      m.emissiveTexture = null;
+      m.emissiveColor = Color3.Black();
+    }
+    if (m.name === "Glass") {
+      m.subSurface.isRefractionEnabled = false;
+      m.albedoColor = new Color3(0.02, 0.025, 0.03);
+      m.metallic = 0;
+      m.roughness = 0.04;
+      m.alpha = 0.42;
+      m.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+      m.backFaceCulling = false;
+    }
+  }
+  if (license) {
+    license.albedoTexture = plate ? plateTexture(scene) : null;
+    if (!plate) license.albedoColor = new Color3(0.9, 0.9, 0.86);
+    if (license.albedoTexture) license.albedoTexture.wrapU = license.albedoTexture.wrapV = Texture.CLAMP_ADDRESSMODE;
+  }
+}
+
+// Light version for traffic and parked cars: everything merged into one
+// mesh (one piece per material), ready to be drawn many times at once.
+export async function loadCarLod(scene) {
+  const result = await ImportMeshAsync("assets/car/concept_car_lod.glb", scene, {
+    pluginOptions: { gltf: { createInstances: false, extensionOptions: { KHR_materials_transmission: { enabled: false } } } },
+  });
+  const gltfRoot = result.meshes[0];
+  const materials = new Set(result.meshes.map((m) => m.material).filter(Boolean));
+  fixMaterials(scene, materials, false);
+  // Paint is white here; each car's colour comes from its own instance colour.
+  for (const m of materials) if (/^Paint 1/.test(m.name)) m.albedoColor = new Color3(1, 1, 1);
+  const wheelParts = [];
+  const handled = new Set();
+  for (const w of WHEELS) {
+    const node = result.transformNodes.find((n) => n.name === w.name);
+    if (!node) continue;
+    const pos = node.getAbsolutePosition().clone();
+    const parts = node.getChildMeshes(false).filter((m) => m.getTotalVertices() > 0);
+    parts.forEach((m) => handled.add(m));
+    const merged = mergeParts(parts, true);
+    merged.bakeTransformIntoVertices(axleFix(node, pos));
+    wheelParts.push(merged);
+  }
+  const bodyParts = result.meshes.filter((m) => m.getTotalVertices() > 0 && !handled.has(m));
+  const mesh = mergeParts([...bodyParts, ...wheelParts], true);
+  mesh.name = "carLod";
+  gltfRoot.dispose();
+  wheelParts.forEach((m) => m.dispose());
+  mesh.isPickable = false;
+  return mesh;
+}
+
 // Loads the car and rearranges it into:
 //   root (position + heading + ground tilt)
 //     body (extra lean from braking / cornering)
@@ -77,29 +147,7 @@ export async function loadCar(scene, onProgress) {
 
   // --- Materials ----------------------------------------------------------------
   const materials = new Set(result.meshes.map((m) => m.material).filter(Boolean));
-  const license = [...materials].find((m) => m.name === "License");
-  const logoTexture = license?.albedoTexture;
-  for (const m of materials) {
-    if (!(m instanceof PBRMaterial)) continue;
-    // The sample model carries the Khronos logo on its plate, rims and calipers.
-    if (logoTexture && m.emissiveTexture === logoTexture) {
-      m.emissiveTexture = null;
-      m.emissiveColor = Color3.Black();
-    }
-    if (m.name === "Glass") {
-      m.subSurface.isRefractionEnabled = false;
-      m.albedoColor = new Color3(0.02, 0.025, 0.03);
-      m.metallic = 0;
-      m.roughness = 0.04;
-      m.alpha = 0.42;
-      m.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-      m.backFaceCulling = false;
-    }
-  }
-  if (license) {
-    license.albedoTexture = plateTexture(scene);
-    license.albedoTexture.wrapU = license.albedoTexture.wrapV = Texture.CLAMP_ADDRESSMODE;
-  }
+  fixMaterials(scene, materials);
 
   // --- Wheels ---------------------------------------------------------------------
   root.computeWorldMatrix(true);
@@ -124,12 +172,26 @@ export async function loadCar(scene, onProgress) {
   const meshes = [];
   const wheelParts = new Set();
   for (const w of wheels) {
+    const node = scene.getTransformNodeByName(w.name);
+    const fix = axleFix(node, w.rest);
+
     const parts = w.spin.getChildMeshes(false).filter((m) => m.getTotalVertices() > 0);
     parts.forEach((m) => wheelParts.add(m));
-    const merged = mergeParts(parts, true);
+    // Brake calipers turn with steering but must not spin with the wheel.
+    const calipers = parts.filter((m) => /BrakePad/.test(m.name));
+    const spinning = parts.filter((m) => !calipers.includes(m));
+    const merged = mergeParts(spinning, true);
+    merged.bakeTransformIntoVertices(fix);
     merged.name = `${w.name}_mesh`;
     merged.setParent(w.spin);
     meshes.push(merged);
+    if (calipers.length) {
+      const c = mergeParts(calipers, true);
+      c.bakeTransformIntoVertices(fix);
+      c.name = `${w.name}_caliper`;
+      c.setParent(w.steer);
+      meshes.push(c);
+    }
   }
   // The steering wheel inside the cabin gets its own pivot so it can turn.
   // It spins around its own local Y axis (the steering column).
