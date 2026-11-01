@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Driving Game" />
+    <meta name="theme-color" content="#0d1117" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+    <title>Driving Game</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+
+    <div id="hud" hidden>
+      <div id="fps" class="fps"></div>
+
+      <div class="top-buttons">
+        <button id="btn-camera" class="round" aria-label="Change camera">
+          <svg viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="13" r="3.6" /></svg>
+        </button>
+        <button id="btn-reset" class="round" aria-label="Put car back on the road">
+          <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v4.5h4.5" /></svg>
+        </button>
+        <button id="btn-settings" class="round" aria-label="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5" /></svg>
+        </button>
+      </div>
+
+      <div id="steer-zone">
+        <div id="steer-base">
+          <span class="arrow left">&#9664;</span>
+          <span class="arrow right">&#9654;</span>
+          <div id="steer-knob"></div>
+        </div>
+        <div class="hint">Slide to steer</div>
+      </div>
+
+      <div class="pedals">
+        <button id="btn-hand" class="hand">HAND<br />BRAKE</button>
+        <button id="btn-brake" class="pedal brake">BRAKE</button>
+        <button id="btn-gas" class="pedal gas">GAS</button>
+      </div>
+
+      <div class="speedo">
+        <span id="speed">0</span>
+        <span id="unit">mph</span>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
+
+    <div id="settings" class="panel" hidden>
+      <div class="panel-card">
+        <h2>Settings</h2>
+        <div class="row">
+          <div class="label">Graphics</div>
+          <div class="seg" id="seg-graphics">
+            <button data-v="auto">Auto</button>
+            <button data-v="low">Low</button>
+            <button data-v="medium">Medium</button>
+            <button data-v="high">High</button>
+          </div>
+        </div>
+        <p class="note" id="graphics-note"></p>
+        <div class="row">
+          <div class="label">Speed</div>
+          <div class="seg" id="seg-units">
+            <button data-v="mph">mph</button>
+            <button data-v="kmh">km/h</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="label">Frame rate counter</div>
+          <div class="seg" id="seg-fps">
+            <button data-v="on">On</button>
+            <button data-v="off">Off</button>
+          </div>
+        </div>
+        <details class="credits">
+          <summary>Credits</summary>
+          <p>Car: "Car Concept" by Eric Chadwick, &copy; 2024 Darmstadt Graphics Group GmbH, from the Khronos glTF Sample Assets. Licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Logos removed and number plate changed.</p>
+          <p>Sky, ground, road, wall, bark and leaf textures from <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0).</p>
+          <p>Made with <a href="https://www.babylonjs.com" target="_blank" rel="noopener">Babylon.js</a>.</p>
+        </details>
+        <button id="btn-close" class="close">Back to driving</button>
+      </div>
+    </div>
+
+    <div id="loading" class="screen">
+      <div class="loading-card">
+        <h1>Driving Game</h1>
+        <div class="bar"><div id="bar-fill"></div></div>
+        <p id="loading-text">Loading…</p>
+      </div>
+    </div>
+
+    <div id="rotate" class="screen rotate">
+      <div>
+        <svg viewBox="0 0 24 24" class="rotate-icon"><rect x="6" y="3" width="12" height="18" rx="2" /><path d="M20 15a8 8 0 0 1-6 6" /></svg>
+        <p>Turn your iPad sideways to play</p>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+* text=auto
+*.hdr binary
+*.glb binary
+*.webp binary
+*.png binary
