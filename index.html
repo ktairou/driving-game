@@ -32,6 +32,9 @@
         <button id="btn-camera" class="round" aria-label="Change camera">
           <svg viewBox="0 0 24 24"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" /><circle cx="12" cy="13" r="3.6" /></svg>
         </button>
+        <button id="btn-time" class="round" aria-label="Change time of day">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.2 2" /></svg>
+        </button>
         <button id="btn-weather" class="round" aria-label="Change weather">
           <svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .5-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z" /><path d="M9 21l1-1.6M13 21l1-1.6" /></svg>
         </button>
@@ -48,11 +51,55 @@
 
       <div id="steer-zone">
         <svg id="wheel" viewBox="0 0 200 200" aria-label="Steering wheel">
-          <circle class="wheel-grip" cx="100" cy="100" r="84" />
-          <circle class="wheel-rim" cx="100" cy="100" r="84" />
-          <path class="wheel-spoke" d="M18 106 Q60 98 78 104 M182 106 Q140 98 122 104 M100 124 L100 182" />
-          <circle class="wheel-hub" cx="100" cy="104" r="26" />
-          <rect class="wheel-mark" x="94" y="9" width="12" height="18" rx="4" />
+          <defs>
+            <linearGradient id="wRim" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#4b4f55" />
+              <stop offset="0.35" stop-color="#25282c" />
+              <stop offset="1" stop-color="#0c0d0f" />
+            </linearGradient>
+            <linearGradient id="wGrip" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#3a3d42" />
+              <stop offset="1" stop-color="#121315" />
+            </linearGradient>
+            <linearGradient id="wSpoke" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#5a5f66" />
+              <stop offset="0.5" stop-color="#2c2f34" />
+              <stop offset="1" stop-color="#1a1c1f" />
+            </linearGradient>
+            <linearGradient id="wMetal" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#eef1f4" />
+              <stop offset="0.5" stop-color="#9aa1a9" />
+              <stop offset="1" stop-color="#5d636a" />
+            </linearGradient>
+            <radialGradient id="wHub" cx="42%" cy="35%" r="75%">
+              <stop offset="0" stop-color="#43474d" />
+              <stop offset="1" stop-color="#121315" />
+            </radialGradient>
+          </defs>
+          <!-- shadow under the wheel -->
+          <circle cx="100" cy="105" r="85" fill="none" stroke="rgba(0,0,0,0.38)" stroke-width="24" />
+          <!-- leather rim -->
+          <circle cx="100" cy="100" r="84" fill="none" stroke="url(#wRim)" stroke-width="21" />
+          <!-- thicker thumb grips at quarter to three -->
+          <path d="M20 78 A84 84 0 0 0 20 122" fill="none" stroke="url(#wGrip)" stroke-width="27" stroke-linecap="round" />
+          <path d="M180 78 A84 84 0 0 1 180 122" fill="none" stroke="url(#wGrip)" stroke-width="27" stroke-linecap="round" />
+          <!-- light catching the top of the rim -->
+          <path d="M34 62 A84 84 0 0 1 166 62" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3.5" stroke-linecap="round" />
+          <!-- stitching -->
+          <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(235,235,230,0.32)" stroke-width="1.3" stroke-dasharray="2.6 3.4" />
+          <!-- faint edges so the dark rim still shows up against a dark road -->
+          <circle cx="100" cy="100" r="95" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1.4" />
+          <circle cx="100" cy="100" r="73" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="1.2" />
+          <!-- red mark at twelve o'clock -->
+          <path d="M92.5 16.3 A84 84 0 0 1 107.5 16.3" fill="none" stroke="#d8392f" stroke-width="21" />
+          <!-- spokes -->
+          <path d="M27 96 C50 94 64 95 76 99 L78 118 C64 120 48 124 29 124 Z" fill="url(#wSpoke)" />
+          <path d="M173 96 C150 94 136 95 124 99 L122 118 C136 120 152 124 171 124 Z" fill="url(#wSpoke)" />
+          <path d="M88 128 L112 128 L108 176 L92 176 Z" fill="url(#wSpoke)" />
+          <path d="M31 109 L74 108 M169 109 L126 108 M100 133 L100 172" fill="none" stroke="url(#wMetal)" stroke-width="2.2" stroke-linecap="round" />
+          <!-- centre hub -->
+          <circle cx="100" cy="108" r="29" fill="url(#wHub)" stroke="url(#wMetal)" stroke-width="2.5" />
+          <circle cx="100" cy="108" r="11" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="2" />
         </svg>
         <div id="stick" hidden><div id="stick-knob"></div></div>
       </div>
@@ -143,7 +190,8 @@
           <summary>Credits</summary>
           <p>Car: "Car Concept" by Eric Chadwick, &copy; 2024 Darmstadt Graphics Group GmbH, from the Khronos glTF Sample Assets. Licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Logos removed and number plate changed.</p>
           <p>Sky, ground, sand, road, wall, stone, bark and leaf textures from <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a> (CC0).</p>
-          <p>Landmarks, towns, people and all sounds are made by the game itself.</p>
+          <p>People and their animations: <a href="https://github.com/microsoft/Microsoft-Rocketbox" target="_blank" rel="noopener">Microsoft Rocketbox</a>, &copy; 2020 Microsoft, licensed under the <a href="https://github.com/microsoft/Microsoft-Rocketbox/blob/master/LICENSE.md" target="_blank" rel="noopener">MIT License</a>.</p>
+          <p>Landmarks, towns and all sounds are made by the game itself.</p>
           <p>Made with <a href="https://www.babylonjs.com" target="_blank" rel="noopener">Babylon.js</a>.</p>
         </details>
         <button id="btn-close" class="close">Back to driving</button>

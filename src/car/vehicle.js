@@ -19,6 +19,10 @@ export class Vehicle {
     this.slip = 0; // how hard the tyres are sliding, for the squeal sound
     this.dynamic = []; // moving things to bump into, refreshed every frame
     this.onBump = null;
+    this.onImpact = null; // (hit) for dents, sparks and smoke
+    this.scrape = 0; // 0..1 while grinding along something
+    this.scrapeAt = null;
+    this.steerInput = 0; // where the steering wheel is, -1..1
     this.setCar(car, spec);
 
     this.x = 0;
@@ -81,6 +85,7 @@ export class Vehicle {
     this.vx = this.vz = this.vy = 0;
     this.yawRate = 0;
     this.steer = 0;
+    this.steerInput = 0;
     this.y = this.world.getHeight(x, z);
     this.grounded = true;
     this._updateTilt(true);
@@ -139,11 +144,27 @@ export class Vehicle {
     let vLat = this.vx * c - this.vz * s;
     const speed = Math.hypot(this.vx, this.vz);
 
-    // --- Steering: quick to turn in, quicker to centre, less lock at speed ---
-    const maxSteer = lerp(0.6, 0.11, clamp(speed / 50, 0, 1));
-    const target = input.steer * maxSteer;
-    const rate = (Math.abs(target) < Math.abs(this.steer) ? 4.5 : 2.6) * (input.steerAnalog ? 2 : 1);
-    this.steer += clamp(target - this.steer, -rate * dt, rate * dt);
+    // --- Steering ---------------------------------------------------------------
+    // Speed-sensitive, like a modern car: full lock is tight in town, but at
+    // speed it's limited to what the tyres can hold (about 1.1 g), so the same
+    // wheel movement is gentler the faster you go.
+    const maxSteer = clamp((11 * this.L) / Math.max(speed * speed, 1), 0.035, 0.6);
+    let target;
+    if (input.steerAngle !== undefined) {
+      // The self-driver asks for a road-wheel angle directly.
+      target = clamp(input.steerAngle, -maxSteer, maxSteer);
+      this.steerInput = target / maxSteer;
+    } else {
+      // The wheel moves smoothly toward where your thumb (or a key) puts it...
+      const wheelRate = input.steerAnalog ? 9 : Math.abs(input.steer) < Math.abs(this.steerInput) ? 3.2 : 1.8;
+      this.steerInput += clamp(input.steer - this.steerInput, -wheelRate * dt, wheelRate * dt);
+      // ...and small movements near the centre do very little, for fine control.
+      const w = this.steerInput;
+      target = Math.sign(w) * Math.pow(Math.abs(w), 1.7) * maxSteer;
+    }
+    // The front wheels can't snap round instantly.
+    const rack = lerp(2.4, 0.6, clamp(speed / 35, 0, 1));
+    this.steer += clamp(target - this.steer, -rack * dt, rack * dt);
 
     // --- Engine, brakes, reverse ----------------------------------------------
     let drive = 0;
@@ -325,10 +346,12 @@ export class Vehicle {
     const s = Math.sin(this.heading);
     const c = Math.cos(this.heading);
     const radius = this.halfTrack * 0.98;
+    let scrape = 0;
     for (const off of [this.a - 0.15, 0, -this.b + 0.1]) {
       const cx = this.x + s * off;
       const cz = this.z + c * off;
       let hit = this.colliders.resolveCircle(cx, cz, radius);
+      let other = null;
       // Moving things: other cars and people.
       for (const o of this.dynamic) {
         const hx = hit ? hit.x : cx;
@@ -339,25 +362,85 @@ export class Vehicle {
         const min = radius + o.r;
         if (d < min && d > 1e-4) {
           const depth = min - d;
+          if (o.person) {
+            // People get knocked out of the way rather than stopping the car.
+            o.person.x -= (dx / d) * depth;
+            o.person.z -= (dz / d) * depth;
+            o.person.pause = Math.max(o.person.pause ?? 0, 1.5);
+            this.vx *= 0.997;
+            this.vz *= 0.997;
+            continue;
+          }
           hit = { x: hx + (dx / d) * depth, z: hz + (dz / d) * depth, nx: dx / d, nz: dz / d, depth };
+          other = o;
           this.onBump?.(o, Math.hypot(this.vx, this.vz));
         }
       }
       if (!hit) continue;
       this.x += hit.x - cx;
       this.z += hit.z - cz;
-      const vn = this.vx * hit.nx + this.vz * hit.nz;
-      if (vn < 0) {
-        this.vx -= hit.nx * vn * 1.25;
-        this.vz -= hit.nz * vn * 1.25;
-        this.vx *= 0.9;
-        this.vz *= 0.9;
-        this.yawRate *= 0.6;
-        // Glancing hits on the nose or tail twist the car a little.
-        this.yawRate += clamp(-vn * 0.02 * Math.sign(off) * (hit.nx * c - hit.nz * s), -0.6, 0.6);
-        this.impact = Math.max(this.impact, clamp(-vn / 15, 0, 1));
+      // Where on the car it was hit, from the car's centre.
+      const rx = s * off - hit.nx * radius;
+      const rz = c * off - hit.nz * radius;
+      const r = this._impulse(rx, rz, hit.nx, hit.nz, other?.car);
+      if (!r) continue;
+      const at = {
+        x: this.x + rx,
+        y: this.y + 0.55,
+        z: this.z + rz,
+        nx: hit.nx,
+        nz: hit.nz,
+        // The same in the car's own space (x right, z forward).
+        lx: rx * c - rz * s,
+        lz: rx * s + rz * c,
+        nlx: hit.nx * c - hit.nz * s,
+        nlz: hit.nx * s + hit.nz * c,
+        speed: r.into,
+      };
+      if (r.into > 2.5) {
+        this.impact = Math.max(this.impact, clamp(r.into / 15, 0, 1));
+        this.onImpact?.(at);
+      }
+      if (r.slide > 2 && r.slide / 20 > scrape) {
+        scrape = clamp(r.slide / 20, 0, 1);
+        this.scrapeAt = at;
       }
     }
+    this.scrape = lerp(this.scrape, scrape, 0.25);
+  }
+
+  // A crash, worked out as a push at the point of contact: it stops the car
+  // going into the obstacle (with only a little bounce, as metal crumples
+  // rather than springs), drags it along the surface with friction, and
+  // twists it round if the hit is off-centre. `other` is a traffic car, whose
+  // own movement counts too. Returns how fast it went in and slid, or null.
+  _impulse(rx, rz, nx, nz, other) {
+    // How the point of contact is moving: the car's travel plus its spin.
+    let vx = this.vx + this.yawRate * rz;
+    let vz = this.vz - this.yawRate * rx;
+    if (other?.moving) {
+      vx -= Math.sin(other.yaw) * other.speed;
+      vz -= Math.cos(other.yaw) * other.speed;
+    }
+    const vn = vx * nx + vz * nz;
+    if (vn >= 0) return null;
+    const invM = 1 / this.mass;
+    // A crash is spread over a moment as the car crumples, so it twists the
+    // car less than one sharp knock would: use a larger turning inertia.
+    const invI = 1 / (this.inertia * 2.2);
+    const restitution = 0.12;
+    const friction = 0.55;
+    const rn = rz * nx - rx * nz;
+    const j = (-(1 + restitution) * vn) / (invM + rn * rn * invI);
+    const tx = -nz;
+    const tz = nx;
+    const vt = vx * tx + vz * tz;
+    const rt = rz * tx - rx * tz;
+    const jt = clamp(-vt / (invM + rt * rt * invI), -friction * j, friction * j);
+    this.vx += (j * nx + jt * tx) * invM;
+    this.vz += (j * nz + jt * tz) * invM;
+    this.yawRate = clamp(this.yawRate + (j * rn + jt * rt) * invI, -3, 3);
+    return { into: -vn, slide: Math.abs(vt) };
   }
 
   sync() {
@@ -365,8 +448,8 @@ export class Vehicle {
     root.position.set(this.x, this.y, this.z);
     root.rotation.set(this.pitch, this.heading, this.roll);
     body.rotation.set(this.bodyPitch, 0, this.bodyRoll);
-    // Cabin steering wheel turns 4.5x the front wheels' angle.
-    if (steeringPivot) Quaternion.RotationAxisToRef(steeringAxis, this.steer * 4.5, steeringPivot.rotationQuaternion);
+    // Cabin steering wheel matches the on-screen wheel (160 degrees each way).
+    if (steeringPivot) Quaternion.RotationAxisToRef(steeringAxis, this.steerInput * 2.8, steeringPivot.rotationQuaternion);
     // Wheels: steer the fronts, spin all, and let each follow the ground a bit.
     const planeAt = (lz, lx) => this.y - Math.tan(this.pitch) * lz + Math.tan(this.roll) * lx;
     wheels.forEach((w, i) => {

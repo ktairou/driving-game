@@ -1,6 +1,6 @@
 import { clamp } from "./noise.js";
 
-const WHEEL_LOCK = 120; // degrees of on-screen wheel turn for full steering lock
+export const WHEEL_LOCK = 160; // degrees of on-screen wheel turn for full steering lock
 const WHEEL_DEAD_PX = 18; // touches this close to the hub don't turn the wheel
 const STICK_RANGE_PX = 60; // thumb travel for full speed on foot
 

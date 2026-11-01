@@ -8,7 +8,7 @@ export const PRESETS = {
 export const LEVELS = ["low", "medium", "high"];
 
 const KEY = "drivingGame.settings.v1";
-const DEFAULTS = { graphics: "auto", units: "mph", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red" };
+const DEFAULTS = { graphics: "auto", units: "mph", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10 };
 
 export function loadSettings() {
   try {

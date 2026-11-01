@@ -237,10 +237,13 @@ export class AutoDriver {
       this.arrived = true;
       this.route = null;
       // Handbrake, not the brake pedal: the pedal would start reversing.
-      return { steer: 0, throttle: 0, brake: 0, handbrake: true, steerAnalog: true };
+      return { steer: 0, steerAngle: 0, throttle: 0, brake: 0, handbrake: true, steerAnalog: true };
     }
     const throttle = speed < target - 0.4 ? clamp((target - speed) / 4, 0.25, 1) : 0;
     const brake = speed > target + 1.2 ? clamp((speed - target) / 5, 0.15, 1) : 0;
-    return { steer: clamp(err * 2.2, -1, 1), throttle, brake, handbrake: false, steerAnalog: true };
+    // Pure pursuit: the wheel angle that arcs the car onto the target point.
+    const lookDist = Math.max(4, Math.hypot(tx - v.x, tz - v.z));
+    const steerAngle = Math.atan2(2 * v.L * Math.sin(err), lookDist);
+    return { steer: 0, steerAngle, throttle, brake, handbrake: false, steerAnalog: true };
   }
 }

@@ -62,8 +62,13 @@ export class GameAudio {
     comp.threshold.value = -16;
     comp.ratio.value = 3;
     this.master = ctx.createGain();
-    this.master.gain.value = this.enabled ? 0.9 : 0;
+    this.master.gain.value = this.enabled && !this.paused ? 0.9 : 0;
     this.master.connect(comp).connect(ctx.destination);
+    // Stop all sound when the game goes into the background.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) ctx.suspend();
+      else ctx.resume();
+    });
 
     const white = noiseBuffer(ctx, 2);
     const brown = noiseBuffer(ctx, 3, true);
@@ -112,6 +117,9 @@ export class GameAudio {
     loop(white).connect(filter("bandpass", 1500, 2.5)).connect(this.tyreGain).connect(this.master);
     this.roadGain = gain(0);
     loop(brown).connect(filter("lowpass", 260)).connect(this.roadGain).connect(this.master);
+    // Metal grinding along a wall.
+    this.scrapeGain = gain(0);
+    loop(white, 1.3).connect(filter("bandpass", 2600, 3)).connect(filter("highpass", 1100)).connect(this.scrapeGain).connect(this.master);
     this.windGain = gain(0);
     this.windFilter = filter("bandpass", 700, 0.6);
     loop(white, 0.7).connect(this.windFilter).connect(this.windGain).connect(this.master);
@@ -133,7 +141,18 @@ export class GameAudio {
 
   setEnabled(on) {
     this.enabled = on;
-    if (this.master) this.master.gain.setTargetAtTime(on ? 0.9 : 0, this.ctx.currentTime, 0.1);
+    this._applyVolume();
+  }
+
+  // Silence everything while a menu is open (the game is paused then).
+  setPaused(paused) {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    this._applyVolume();
+  }
+
+  _applyVolume() {
+    if (this.master) this.master.gain.setTargetAtTime(this.enabled && !this.paused ? 0.9 : 0, this.ctx.currentTime, 0.08);
   }
 
   _set(param, value, time = 0.08) {
@@ -141,7 +160,7 @@ export class GameAudio {
   }
 
   // Short one-off noise burst through a filter, e.g. crashes and splashes.
-  _burst(type, freq, volume, decay, buffer = this.white) {
+  _burst(type, freq, volume, decay, buffer = this.white, delay = 0) {
     const ctx = this.ctx;
     const s = ctx.createBufferSource();
     s.buffer = buffer;
@@ -149,7 +168,7 @@ export class GameAudio {
     f.type = type;
     f.frequency.value = freq;
     const g = ctx.createGain();
-    const now = ctx.currentTime;
+    const now = ctx.currentTime + delay;
     g.gain.setValueAtTime(volume, now);
     g.gain.exponentialRampToValueAtTime(0.0001, now + decay);
     s.connect(f).connect(g).connect(this.master);
@@ -157,10 +176,20 @@ export class GameAudio {
     s.stop(now + decay + 0.05);
   }
 
+  // A thump, crumpling metal, a rattle of bits giving way and, for big
+  // hits, a tinkle of glass.
   crash(strength) {
     if (!this.ctx) return;
-    this._burst("lowpass", 900, 0.9 * strength, 0.5);
-    this._burst("bandpass", 2400, 0.35 * strength, 0.25);
+    const s = clamp(strength, 0, 1);
+    this._burst("lowpass", 240, 1.3 * s, 0.4, this.brown);
+    this._burst("bandpass", 1200, 0.8 * s, 0.45);
+    const bits = 2 + Math.round(s * 6);
+    for (let i = 0; i < bits; i++) {
+      this._burst("bandpass", 1700 + Math.random() * 2800, (0.3 + Math.random() * 0.25) * s, 0.05 + Math.random() * 0.12, this.white, 0.015 + i * (0.02 + Math.random() * 0.035));
+    }
+    if (s > 0.55) {
+      for (let i = 0; i < 6; i++) this._burst("bandpass", 5200 + Math.random() * 3000, 0.12 * s, 0.08 + Math.random() * 0.1, this.white, 0.05 + Math.random() * 0.45);
+    }
   }
 
   splash() {
@@ -201,19 +230,22 @@ export class GameAudio {
     const speed = car ? car.speed : 0;
     const driving = car && !onFoot;
 
-    // Engine: louder and brighter with throttle; muffled from far away / on foot.
+    // Engine: off once you've got out; only a quiet tick-over when sitting
+    // still; louder and brighter with throttle and revs.
     const rpm = car ? car.rpm : 0;
     const load = car ? car.throttle : 0;
-    const near = driving ? 1 : 0.25;
+    const moving = clamp(speed / 6, 0, 1);
+    const idle = !driving ? 0 : 0.035 + moving * 0.11; // nearly silent when stopped
     this._set(this.engineSrc.playbackRate, Math.max(0.5, rpm / 1000), 0.05);
-    this._set(this.engineTone.frequency, 500 + load * 2200 + rpm * 0.15);
-    this._set(this.engineGain.gain, car ? (0.16 + load * 0.3) * near * (inCabin ? 0.8 : 1) : 0);
+    this._set(this.engineTone.frequency, 400 + load * 2200 + rpm * 0.15);
+    this._set(this.engineGain.gain, driving ? (idle + load * 0.3) * (inCabin ? 0.8 : 1) : 0, 0.12);
     this._set(this.growl.frequency, (rpm / 60) * 4, 0.05);
     this._set(this.growlFilter.frequency, 250 + load * 700);
-    this._set(this.growlGain.gain, car ? (0.035 + load * 0.06) * near : 0);
+    this._set(this.growlGain.gain, driving ? 0.008 + moving * 0.025 + load * 0.06 : 0, 0.12);
 
     const slip = car ? clamp((car.slip - 0.1) * 4, 0, 1) : 0;
     this._set(this.tyreGain.gain, driving && car.grounded ? slip * 0.22 * clamp(speed / 8, 0, 1) : 0);
+    this._set(this.scrapeGain.gain, driving ? car.scrape * (0.3 + Math.random() * 0.15) : 0, 0.03);
     this._set(this.roadGain.gain, driving && car.grounded ? clamp(speed / 40, 0, 1) * 0.35 : 0);
     const windAmt = driving ? clamp((speed - 8) / 50, 0, 1) : 0;
     this._set(this.windGain.gain, windAmt * windAmt * (inCabin ? 0.12 : 0.3));

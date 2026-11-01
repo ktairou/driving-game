@@ -13,6 +13,12 @@ export class World {
     this.network = new RoadNetwork(this);
     for (const isl of this.islands) isl.buildGrid(this.network);
     this._indexBridges();
+    this.slabs = []; // raised flat areas such as pavements, added by the towns
+  }
+
+  // A raised flat area (a pavement): its top counts as the ground.
+  addSlab(x0, x1, z0, z1, top) {
+    this.slabs.push({ x0, x1, z0, z1, top });
   }
 
   islandById(id) {
@@ -77,7 +83,11 @@ export class World {
     const i = this.islandAt(x, z);
     const h = i ? i.getHeight(x, z) : SEA_FLOOR;
     const deck = this.deckHeight(x, z);
-    return deck !== null && deck > h ? deck : h;
+    let top = deck !== null && deck > h ? deck : h;
+    for (const s of this.slabs) {
+      if (x >= s.x0 && x <= s.x1 && z >= s.z0 && z <= s.z1 && s.top > top) top = s.top;
+    }
+    return top;
   }
 
   getNormal(x, z, e = 1.5) {

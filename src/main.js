@@ -11,6 +11,7 @@ import { buildNature } from "./world/nature.js";
 import { SPAWN, LANE_OFFSET, SEA_LEVEL } from "./world/layout.js";
 import { loadCar, loadCarLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
+import { CarDamage } from "./car/damage.js";
 import { ChaseCamera } from "./camera.js";
 import { Input } from "./input.js";
 import { Weather, WEATHERS } from "./weather.js";
@@ -20,6 +21,8 @@ import { People } from "./people.js";
 import { Navigator, AutoDriver } from "./navigation.js";
 import { renderMapImage, MiniMap, BigMap, PLACES } from "./map.js";
 import { GARAGE, stats, applyPaint } from "./garage.js";
+import { DayNight, TIME_PRESETS } from "./daynight.js";
+import { NightLights } from "./nightlights.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -102,6 +105,8 @@ async function start() {
   let paint = carEntry.paint;
   applyPaint(car, paint);
   const vehicle = new Vehicle(car, world, colliders, carEntry.spec);
+  const damage = new CarDamage(scene, car);
+  vehicle.onImpact = (hit) => damage.hit(hit);
   vehicle.place(SPAWN.x, SPAWN.z, SPAWN.heading);
 
   setProgress(0.82, "Filling the roads…");
@@ -115,7 +120,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, lod, ...people.meshList]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, lod]) csm.addShadowCaster(m, false);
 
   // ---------- Camera effects ----------
   const pipeline = new DefaultRenderingPipeline("post", true, scene, [chase.camera]);
@@ -152,6 +157,8 @@ async function start() {
   for (const m of asphalt) m._baseTint = m.albedoColor.clone();
   const weather = new Weather(scene, sky, world, preset, { asphalt, leaves: findMats(/^leaves/) });
   weather.set(settings.weather);
+  const daynight = new DayNight(scene, sky, pipeline, weather, settings.hour);
+  const nightLights = new NightLights(scene, { world, town, car, lod });
   const audio = new GameAudio();
   audio.enabled = settings.sound;
   weather.onThunder = (delay) => audio.thunder(delay);
@@ -178,6 +185,7 @@ async function start() {
     const isl = world.islandAt(x, z);
     const lane = isl && isl.def.drive === "left" ? -LANE_OFFSET : LANE_OFFSET;
     vehicle.place(x + tz * lane, z - tx * lane, Math.atan2(tx, tz));
+    damage.repair();
     chase._first = true;
   };
   input.handlers.camera = () => {
@@ -205,6 +213,14 @@ async function start() {
   });
   $("btn-camera").addEventListener("click", () => input.handlers.camera());
   $("btn-reset").addEventListener("click", () => mode === "drive" && resetCar());
+  $("btn-time").addEventListener("click", () => {
+    const i = TIME_PRESETS.findIndex((p) => p.id === daynight.phase);
+    const next = TIME_PRESETS[(i + 1) % TIME_PRESETS.length];
+    daynight.jumpTo(next.id);
+    settings.hour = daynight.hour;
+    saveSettings(settings);
+    toast(next.name);
+  });
   $("btn-weather").addEventListener("click", () => {
     const w = weather.cycle();
     settings.weather = w.id;
@@ -247,6 +263,7 @@ async function start() {
       traffic.remove(t);
       traffic.addParked(vehicle.x, vehicle.z, vehicle.heading, paint.colour);
       vehicle.place(t.x, t.z, t.yaw);
+      damage.repair();
       paint = { colour: t.colour, metallic: 0.75, roughness: 0.22 };
       applyPaint(car, paint);
       toast("New car — enjoy!");
@@ -345,6 +362,7 @@ async function start() {
         paint = g.paint;
         applyPaint(car, paint);
         vehicle.setCar(car, g.spec);
+        damage.repair();
         settings.car = g.id;
         saveSettings(settings);
         renderGarage();
@@ -465,6 +483,7 @@ async function start() {
   let lastImpact = 0;
   const place = { town: 0, sea: 0 };
   let placeTimer = 0;
+  let saveTimer = 20;
   vehicle.onBump = (o, speed) => {
     if (o.car && o.car.moving && speed > 1) o.car.stopTimer = 3;
   };
@@ -499,6 +518,16 @@ async function start() {
     people.update(dt, mode === "drive" ? vehicle : null);
     people.draw();
     weather.update(dt, chase.camera, vehicle);
+    daynight.update(dt);
+    damage.update(dt, vehicle, daynight.night);
+    nightLights.update(daynight.night, mode === "drive" && vehicle.forwardSpeed > 0.5 && (autodriver.active ? false : input.brake > 0), me, traffic.cars);
+    // Remember the time of day now and then, so it carries on next time.
+    saveTimer -= dt;
+    if (saveTimer <= 0) {
+      saveTimer = 20;
+      settings.hour = daynight.hour;
+      saveSettings(settings);
+    }
 
     // Crashes and splashes.
     if (vehicle.impact > lastImpact + 0.12) audio.crash(Math.min(1, vehicle.impact));
@@ -560,13 +589,22 @@ async function start() {
   setProgress(1, "Ready");
   $("loading").hidden = true;
   $("hud").hidden = false;
+  // People download in the background once you can drive.
+  people
+    .load()
+    .then(() => {
+      for (const m of people.meshList) csm.addShadowCaster(m, false);
+    })
+    .catch((err) => console.warn("People did not load", err));
   country = world.islandAt(vehicle.x, vehicle.z)?.def.name ?? null;
 
   let fpsTimer = 0;
   let shownSpeed = -1;
   engine.runRenderLoop(() => {
     const dt = Math.min(engine.getDeltaTime() / 1000, 0.1);
-    if (!anyPanelOpen()) tick(dt);
+    const paused = anyPanelOpen();
+    audio.setPaused(paused);
+    if (!paused) tick(dt);
     if (mode === "drive") chase.update(dt, vehicle);
     else chase.followPerson(dt, people.player);
 
@@ -591,7 +629,7 @@ async function start() {
     fpsTimer += dt;
     if (fpsTimer > 0.5) {
       fpsTimer = 0;
-      $("fps").textContent = `${Math.round(engine.getFps())} fps · ${levelName(level)}`;
+      $("fps").textContent = `${daynight.clock} · ${Math.round(engine.getFps())} fps · ${levelName(level)}`;
     }
     watchFrameRate(dt);
     scene.render();
@@ -614,7 +652,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, setMode, get mode() { return mode; }, pickDestination };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, setMode, get mode() { return mode; }, pickDestination };
   }
 }
 

@@ -188,6 +188,19 @@ async function main() {
   await writeFile(path.join(outDir, "sky", "sky_2k.hdr"), writeHdr(skyImg));
   await writeFile(path.join(outDir, "sky", "sun.json"), JSON.stringify({ direction: sunDir }, null, 2));
 
+  // Sunset and night skies for the day/night cycle (CC0, Poly Haven)
+  for (const [id, name, maxLum] of [
+    ["qwantani_sunset_puresky", "sunset", 25],
+    ["qwantani_night_puresky", "night", 6],
+  ]) {
+    const files = await phFiles(id);
+    const src = await download(files.hdri["2k"].hdr.url, `${id}_2k.hdr`);
+    const img = readHdr(await readFile(src));
+    const dir = clampSun(img, maxLum);
+    await writeFile(path.join(outDir, "sky", `sky_${name}_2k.hdr`), writeHdr(img));
+    await writeFile(path.join(outDir, "sky", `sun_${name}.json`), JSON.stringify({ direction: dir }, null, 2));
+  }
+
   // Ground, road and building surfaces (CC0, Poly Haven)
   await phTexture("rocky_terrain_02", "2k", "grass");
   await phTexture("aerial_rocks_02", "1k", "rock");

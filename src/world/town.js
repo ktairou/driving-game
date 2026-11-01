@@ -1,4 +1,4 @@
-import { DynamicTexture, PBRMaterial, Texture, MeshBuilder, Mesh, Matrix, Quaternion, Vector3 } from "@babylonjs/core";
+import { DynamicTexture, PBRMaterial, Texture, MeshBuilder, Mesh, Matrix, Quaternion, Vector3, Color3 } from "@babylonjs/core";
 import { GeometryBuilder } from "../geom.js";
 import { mulberry32 } from "../noise.js";
 import { surfaceMaterial, plainMaterial, rgb } from "./materials.js";
@@ -20,10 +20,11 @@ function loadImage(src) {
   });
 }
 
-function facadeMaterial(scene, name, albedo, orm) {
+function facadeMaterial(scene, name, albedo, orm, glow) {
   albedo.update(true);
   orm.update(true);
-  for (const t of [albedo, orm]) {
+  glow.update(true);
+  for (const t of [albedo, orm, glow]) {
     // Dynamic textures clamp by default; the facade must repeat up and along walls.
     t.wrapU = Texture.WRAP_ADDRESSMODE;
     t.wrapV = Texture.WRAP_ADDRESSMODE;
@@ -38,7 +39,21 @@ function facadeMaterial(scene, name, albedo, orm) {
   m.useMetallnessFromMetallicTextureBlue = true;
   m.metallic = 1;
   m.roughness = 1;
+  // Lit windows: switched on at night by nightlights.js.
+  m.emissiveTexture = glow;
+  m.emissiveColor = new Color3(0, 0, 0);
+  m.metadata = { windows: true };
   return m;
+}
+
+const WINDOW_GLOWS = ["#ffd9a0", "#ffe8c2", "#fff2dc", "#ffcf8a", "#d9e6ff"];
+
+function glowTexture(scene, name, W, H) {
+  const t = new DynamicTexture(`${name}_glow`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const c = t.getContext();
+  c.fillStyle = "#000";
+  c.fillRect(0, 0, W, H);
+  return { t, c };
 }
 
 // Paints a facade (wall + windows) and a matching roughness map on canvases.
@@ -51,6 +66,7 @@ function paintFacade(scene, name, wallImg, wallTint, frameColor, seed, win = [0.
   const orm = new DynamicTexture(`${name}_orm`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
   const a = albedo.getContext();
   const o = orm.getContext();
+  const glow = glowTexture(scene, name, W, H);
 
   // Wall: photo texture tiled (one tile is about 2.3 m of wall), then tinted.
   const tile = 170;
@@ -83,6 +99,10 @@ function paintFacade(scene, name, wallImg, wallTint, frameColor, seed, win = [0.
       a.fillRect(x, y, w, h);
       o.fillStyle = "rgb(255, 18, 0)";
       o.fillRect(x, y, w, h);
+      if (rand() < 0.5) {
+        glow.c.fillStyle = WINDOW_GLOWS[Math.floor(rand() * WINDOW_GLOWS.length)];
+        glow.c.fillRect(x, y, w, h);
+      }
       if (rand() < 0.45) {
         const bh = h * (0.15 + rand() * 0.6);
         a.fillStyle = rand() < 0.5 ? "#cfc6b4" : "#8f857a";
@@ -96,7 +116,7 @@ function paintFacade(scene, name, wallImg, wallTint, frameColor, seed, win = [0.
       a.fillRect(x - 14, y + h + 9, w + 28, 12);
     }
   }
-  return facadeMaterial(scene, name, albedo, orm);
+  return facadeMaterial(scene, name, albedo, orm, glow.t);
 }
 
 // Office-tower curtain wall: glass panels with thin metal mullions.
@@ -108,10 +128,15 @@ function paintGlass(scene, name, glassTop, glassBottom, mullion, seed) {
   const orm = new DynamicTexture(`${name}_orm`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
   const a = albedo.getContext();
   const o = orm.getContext();
+  const glow = glowTexture(scene, name, W, H);
   const bayPx = W / TEX_BAYS;
   const floorPx = H / TEX_FLOORS;
   for (let f = 0; f < TEX_FLOORS; f++) {
     for (let b = 0; b < TEX_BAYS; b++) {
+      if (rand() < 0.4) {
+        glow.c.fillStyle = rand() < 0.7 ? "#e8f0ff" : "#ffe6b8";
+        glow.c.fillRect(b * bayPx, f * floorPx, bayPx, floorPx);
+      }
       const g = a.createLinearGradient(0, f * floorPx, 0, (f + 1) * floorPx);
       g.addColorStop(0, glassTop);
       g.addColorStop(1, glassBottom);
@@ -134,8 +159,12 @@ function paintGlass(scene, name, glassTop, glassBottom, mullion, seed) {
   for (let f = 0; f <= TEX_FLOORS; f++) {
     a.fillRect(0, f * floorPx - 14, W, 28);
     o.fillRect(0, f * floorPx - 14, W, 28);
+    glow.c.fillStyle = "#000";
+    glow.c.fillRect(0, f * floorPx - 14, W, 28);
   }
-  return facadeMaterial(scene, name, albedo, orm);
+  glow.c.fillStyle = "#000";
+  for (let b = 0; b <= TEX_BAYS; b++) glow.c.fillRect(b * bayPx - 5, 0, 10, H);
+  return facadeMaterial(scene, name, albedo, orm, glow.t);
 }
 
 function addBox(g, x0, x1, z0, z1, y0, y1, ground) {
@@ -286,6 +315,7 @@ export async function buildTown(scene, world, colliders) {
       const za = Math.min(zi, zo);
       const zb = Math.max(zi, zo);
       for (const [px0, px1] of pieces) {
+        world.addSlab(px0, px1, za, zb, y);
         walk.addQuad([px0, y, za], [px1, y, za], [px1, y, zb], [px0, y, zb], [0, 1, 0], [px0 / 2, za / 2], [px1 / 2, za / 2], [px1 / 2, zb / 2], [px0 / 2, zb / 2]);
         walk.addQuad([px0, ground - 0.2, zi], [px1, ground - 0.2, zi], [px1, y, zi], [px0, y, zi], [0, 0, -side], [px0 / 2, 0], [px1 / 2, 0], [px1 / 2, 0.15], [px0 / 2, 0.15]);
         if (px1 - px0 > 20) pavementSpots.push({ island: isl.id, x0: px0 + 3, x1: px1 - 3, z: sz + side * (ROAD_HALF_WIDTH + 2.4), y });
@@ -315,21 +345,31 @@ export async function buildTown(scene, world, colliders) {
   pole.position.y = 3.8;
   const arm = MeshBuilder.CreateBox("lampArm", { width: 0.1, height: 0.1, depth: 2.0 }, scene);
   arm.position.set(0, 7.5, 0.95);
-  const head = MeshBuilder.CreateBox("lampHead", { width: 0.34, height: 0.14, depth: 0.7 }, scene);
-  head.position.set(0, 7.42, 1.85);
-  const lamp = Mesh.MergeMeshes([pole, arm, head], true, true);
+  const lamp = Mesh.MergeMeshes([pole, arm], true, true);
   lamp.name = "lamps";
   lamp.material = plainMaterial(scene, "lampMetal", rgb(0.16, 0.17, 0.18), { metallic: 0.6, roughness: 0.45 });
+  // The lamp head is separate so it can glow at night.
+  const head = MeshBuilder.CreateBox("lampHeads", { width: 0.34, height: 0.14, depth: 0.7 }, scene);
+  head.bakeTransformIntoVertices(Matrix.Translation(0, 7.42, 1.85));
+  const glow = plainMaterial(scene, "lampGlow", rgb(0.85, 0.85, 0.8), { roughness: 0.3 });
+  glow.emissiveColor = new Color3(0, 0, 0);
+  head.material = glow;
   const buf = new Float32Array(lampMatrices.length * 16);
   lampMatrices.forEach((m, i) => m.copyToArray(buf, i * 16));
   lamp.thinInstanceSetBuffer("matrix", buf, 16, true);
+  head.thinInstanceSetBuffer("matrix", buf.slice(), 16, true);
   casters.push(lamp);
-  meshes.push(lamp);
+  meshes.push(lamp, head);
+  // Where each lamp's light falls on the street.
+  const lampSpots = lampMatrices.map((m) => {
+    const p = Vector3.TransformCoordinates(new Vector3(0, 0, 1.85), m);
+    return { x: p.x, y: p.y - 0.1, z: p.z };
+  });
 
   for (const m of meshes) {
     m.receiveShadows = true;
     m.isPickable = false;
-    if (m !== lamp) m.freezeWorldMatrix();
+    if (m !== lamp && m !== head) m.freezeWorldMatrix();
   }
-  return { meshes, casters, pavementSpots };
+  return { meshes, casters, pavementSpots, lampSpots, lampGlow: glow };
 }

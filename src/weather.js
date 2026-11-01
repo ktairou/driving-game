@@ -126,8 +126,11 @@ export class Weather {
     this.dome.infiniteDistance = true;
     this.dome.isPickable = false;
     this.dome.applyFog = false;
+    this.dome.alphaIndex = 10; // drawn over the sky boxes
     this.domeMat = dm;
     this.time = 0;
+    this.flashLevel = 0;
+    this.effect = { sun: 1, env: 1, fogDensity: 0.0011, fogTint: [1, 1, 1], overcast: 0, flash: 0 };
   }
 
   set(id) {
@@ -163,15 +166,20 @@ export class Weather {
       }
     }
     this.flash = Math.max(0, this.flash - dt * 5);
-    const flash = this.flash > 0.5 ? 1 : this.flash * 0.6;
+    this.flashLevel = this.flash > 0.5 ? 1 : this.flash * 0.6;
 
-    const { light } = this.sky;
-    light.intensity = c.sun + flash * 3;
-    this.scene.environmentIntensity = c.env + flash * 1.5;
-    this.scene.fogDensity = c.fog;
-    this.scene.fogColor.set(c.fogColor[0], c.fogColor[1], c.fogColor[2]);
-    this.domeMat.alpha = clamp(c.overcast, 0, 0.97);
-    this.domeMat.emissiveColor.set(c.fogColor[0] * (1 + flash), c.fogColor[1] * (1 + flash), c.fogColor[2] * (1 + flash));
+    // How this weather changes the light, compared with a sunny day. The
+    // time of day (daynight.js) combines these with its own values.
+    const sunny = WEATHERS[0];
+    this.effect = {
+      sun: c.sun / sunny.sun,
+      env: c.env / sunny.env,
+      fogDensity: c.fog,
+      fogTint: c.fogColor.map((v, i) => v / sunny.fogColor[i]),
+      overcast: clamp(c.overcast, 0, 0.97),
+      flash: this.flashLevel,
+    };
+    this.domeMat.alpha = this.effect.overcast;
     this.dome.setEnabled(c.overcast > 0.01);
 
     weatherFx.x = c.wet;
