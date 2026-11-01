@@ -114,14 +114,8 @@ export class GameAudio {
     // Metal grinding along a wall.
     this.scrapeGain = gain(0);
     loop(white, 1.3).connect(filter("bandpass", 2600, 3)).connect(filter("highpass", 1100)).connect(this.scrapeGain).connect(this.master);
-    this.windGain = gain(0);
-    this.windFilter = filter("bandpass", 700, 0.6);
-    loop(white, 0.7).connect(this.windFilter).connect(this.windGain).connect(this.master);
 
     // --- Background ---------------------------------------------------------------
-    this.ambBreeze = gain(0);
-    this.breezeFilter = filter("lowpass", 500);
-    loop(brown, 0.6).connect(this.breezeFilter).connect(this.ambBreeze).connect(this.master);
     this.ambTown = gain(0);
     loop(brown, 0.4).connect(filter("bandpass", 180, 0.8)).connect(this.ambTown).connect(this.master);
     this.ambSea = gain(0);
@@ -238,16 +232,14 @@ export class GameAudio {
     this._set(this.tyreGain.gain, driving && car.grounded ? slip * 0.22 * clamp(speed / 8, 0, 1) : 0);
     this._set(this.scrapeGain.gain, driving ? car.scrape * (0.3 + Math.random() * 0.15) : 0, 0.03);
     this._set(this.roadGain.gain, driving && car.grounded ? clamp(speed / 40, 0, 1) * 0.35 : 0);
+    // (No wind noise: it sounded like a jet taking off.) Fast driving still
+    // drowns out the background a little.
     const windAmt = driving ? clamp((speed - 8) / 50, 0, 1) : 0;
-    this._set(this.windGain.gain, windAmt * windAmt * (inCabin ? 0.06 : 0.12));
-    this._set(this.windFilter.frequency, 500 + speed * 18);
 
     // Background: depends on where you are and the weather.
     const w = weather;
     const rainy = w.rain;
     const outdoorsQuiet = 1 - clamp(windAmt * 1.5, 0, 0.7);
-    this._set(this.ambBreeze.gain, (0.05 + w.overcast * 0.06 + w.flakes * 0.05) * outdoorsQuiet, 0.5);
-    this._set(this.breezeFilter.frequency, 300 + Math.sin(performance.now() / 2300) * 120 + w.overcast * 200, 0.5);
     this._set(this.ambTown.gain, place.town * 0.12 * outdoorsQuiet, 0.6);
     const swell = 0.5 + 0.5 * Math.sin(performance.now() / 1900);
     this._set(this.ambSea.gain, place.sea * (0.04 + swell * 0.06) * outdoorsQuiet, 0.3);

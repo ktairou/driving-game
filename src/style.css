@@ -367,6 +367,22 @@ button {
   background: #7ee0a5;
 }
 
+#fuel-pct {
+  min-width: 3.4ch;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.fuel.low #fuel-pct {
+  color: #ffb547;
+}
+
+.fuel.empty #fuel-pct {
+  color: #ff5a4f;
+}
+
 .fuel.low #fuel-fill {
   background: #ffb547;
 }

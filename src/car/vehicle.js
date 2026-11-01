@@ -196,6 +196,9 @@ export class Vehicle {
       fLong = 0;
     }
 
+    // Slow speeds: the slip model gets twitchy, so steer "on rails" instead.
+    const lowSpeed = clamp(1 - speed / 5, 0, 1);
+
     // --- Tyres ----------------------------------------------------------------------
     let fLat = 0;
     let torque = 0;
@@ -213,14 +216,13 @@ export class Vehicle {
       const fyF = clamp(-this.corneringFront * slipF, -this.grip * nf, this.grip * nf);
       const fyR = clamp(-this.corneringRear * slipR, -rearGrip * nr, rearGrip * nr);
       fLat = fyF * Math.cos(this.steer) + fyR;
-      fLong += -fyF * Math.sin(this.steer);
+      // (Only when going forwards and not crawling: otherwise this part of the
+      // tyre force wrongly acts as a brake, and backing up on full lock stalls.)
+      if (vLong > 0) fLong += -fyF * Math.sin(this.steer) * (1 - lowSpeed);
       torque = this.a * fyF * Math.cos(this.steer) - this.b * fyR;
       slipAmount = speed > 3 ? Math.max(Math.abs(slipF), Math.abs(slipR)) + (handbrake ? 0.15 : 0) + (brake > 0 && speed > 12 ? 0.05 : 0) : 0;
     }
     this.slip = lerp(this.slip, slipAmount, 0.2);
-
-    // Slow speeds: the slip model gets twitchy, so steer "on rails" instead.
-    const lowSpeed = clamp(1 - speed / 5, 0, 1);
 
     const aLong = fLong / this.mass;
     const aLat = fLat / this.mass;

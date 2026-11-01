@@ -1,14 +1,11 @@
 import { MeshBuilder, StandardMaterial, Color3, Matrix, Quaternion, Vector3 } from "@babylonjs/core";
 import { mulberry32 } from "../noise.js";
-import { inTown, onMainStreet } from "./road.js";
+import { inTown } from "./road.js";
 import { ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./layout.js";
 
-// Speed limits (km/h): the busy main street through each town, the quieter
-// streets around towns, and the open road.
+// Speed limits (km/h): 60 where there are houses, 120 everywhere else.
 export function speedLimitAt(x, z) {
-  if (onMainStreet(x, z)) return 50;
-  if (inTown(x, z, 150)) return 70;
-  return 120;
+  return inTown(x, z, 20) ? 60 : 120;
 }
 
 // Traffic lights at every crossroads and T-junction in a town. Each one has

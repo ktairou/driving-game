@@ -181,6 +181,7 @@ async function start() {
   const navigator = new Navigator(world);
   const autodriver = new AutoDriver(world, navigator);
   autodriver.lights = lights;
+  autodriver.colliders = colliders;
   const mapImage = renderMapImage(world);
   const minimap = new MiniMap($("minimap"), mapImage);
   let guide = null; // { route, name, progress }
@@ -313,7 +314,7 @@ async function start() {
       // Swap: your old car is left parked here, you take this one.
       const t = nearbyCar;
       traffic.remove(t);
-      traffic.addParked(vehicle.x, vehicle.z, vehicle.heading, paint.colour);
+      traffic.addParked(vehicle.x, vehicle.z, vehicle.heading, paint.colour).abandoned = true;
       vehicle.place(t.x, t.z, t.yaw);
       damage.repair();
       paint = { colour: t.colour, metallic: 0.75, roughness: 0.22 };
@@ -573,7 +574,7 @@ async function start() {
     if (mode === "drive") {
       let controls = input;
       if (autodriver.active) {
-        controls = autodriver.drive(vehicle, traffic);
+        controls = autodriver.drive(vehicle, traffic, dt);
         if (autodriver.arrived) {
           $("auto-chip").hidden = true;
           toast(`You've arrived at ${guide?.name ?? "your destination"}`);
@@ -728,6 +729,7 @@ async function start() {
       shownFuel = fuelPct;
       shownElectric = fuel.electric;
       $("fuel-fill").style.width = `${fuelPct}%`;
+      $("fuel-pct").textContent = `${fuelPct}%`;
       const gauge = $("fuel");
       gauge.classList.toggle("electric", fuel.electric);
       gauge.classList.toggle("low", fuel.level <= 0.2);

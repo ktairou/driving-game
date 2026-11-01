@@ -109,8 +109,13 @@ export class Traffic {
       for (let x = s.x0 + 14; x < s.x1 - 14; x += 22) {
         for (const side of [-1, 1]) {
           const px = x + (this.rand() - 0.5) * 6;
-          const pz = s.z + side * (ROAD_HALF_WIDTH - 1.05);
-          if (!this.world.network.isNearMeeting(px, pz, 14)) spots.push({ isl, x: px, z: pz, side });
+          // Against the kerb of the road as it really runs (near the ends of
+          // a street it can curve a little off the straight line).
+          const { road, index } = this.world.network.nearest(px, s.z);
+          const [rx, rz] = road.points[index];
+          if (Math.abs(rz - s.z) > 0.4) continue;
+          const pz = rz + side * (ROAD_HALF_WIDTH - 1.05);
+          if (!this.world.network.isNearMeeting(px, pz, 14)) spots.push({ isl, x: rx, z: pz, side });
         }
       }
     }
@@ -161,6 +166,13 @@ export class Traffic {
   }
 
   update(dt, player, camera) {
+    // A car you swapped out of is left where you stopped, maybe in the middle
+    // of the road. Once you're well away it gets towed, so it can't hold
+    // traffic up for ever.
+    if (player) {
+      const towed = this.cars.filter((c) => c.abandoned && Math.hypot(c.x - player.x, c.z - player.z) > 200);
+      if (towed.length) this.cars = this.cars.filter((c) => !towed.includes(c));
+    }
     const moving = this.cars.filter((c) => c.moving);
     for (const car of moving) {
       // Target speed: cruising, slower in towns and on bends.

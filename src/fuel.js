@@ -7,7 +7,7 @@ import { toStation } from "./world/stations.js";
 // to the car, fill up, put it back and get in again.
 
 export const FUEL_FLOOR = 0.1; // it never drops below this; you just keep being told to fill up
-const DRAIN = 1 / 820; // a full tank lasts about 20 minutes of ordinary driving
+const DRAIN = 1 / 500; // a full tank lasts about 12 minutes of ordinary driving
 const WALK = 1.35; // walking speed, m/s
 
 export class Fuel {
