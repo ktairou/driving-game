@@ -17,6 +17,7 @@ export class Vehicle {
     this.rpm = 900;
     this.gear = 1;
     this.slip = 0; // how hard the tyres are sliding, for the squeal sound
+    this.throttle = 0;
     this.dynamic = []; // moving things to bump into, refreshed every frame
     this.onBump = null;
     this.onImpact = null; // (hit) for dents, sparks and smoke

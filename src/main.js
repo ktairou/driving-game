@@ -4,11 +4,11 @@ import { setupSky, createShadows } from "./sky.js";
 import { World } from "./world/world.js";
 import { Colliders } from "./world/colliders.js";
 import { buildTerrain } from "./world/terrain.js";
-import { buildRoad, inTown } from "./world/road.js";
+import { buildRoad } from "./world/road.js";
 import { buildTown } from "./world/town.js";
 import { buildLandmarks } from "./world/landmarks.js";
 import { buildNature } from "./world/nature.js";
-import { SPAWN, LANE_OFFSET, SEA_LEVEL } from "./world/layout.js";
+import { SPAWN, LANE_OFFSET } from "./world/layout.js";
 import { loadCar, loadCarLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
 import { CarDamage } from "./car/damage.js";
@@ -173,7 +173,6 @@ async function start() {
   const nightLights = new NightLights(scene, { world, town, car, lod });
   const audio = new GameAudio();
   audio.enabled = settings.sound;
-  weather.onThunder = (delay) => audio.thunder(delay);
   document.addEventListener("pointerdown", () => audio.start(), true);
   document.addEventListener("keydown", () => audio.start(), true);
 
@@ -561,8 +560,6 @@ async function start() {
   let country = null;
   let splashing = false;
   let lastImpact = 0;
-  const place = { town: 0, sea: 0 };
-  let placeTimer = 0;
   let saveTimer = 20;
   vehicle.onBump = (o, speed) => {
     if (o.car && o.car.moving && speed > 1) o.car.stopTimer = 3;
@@ -639,15 +636,7 @@ async function start() {
       if (country) toast(`Welcome to ${name} — drive on the ${isl.def.drive}`);
       country = name;
     }
-    placeTimer -= dt;
-    if (placeTimer <= 0) {
-      placeTimer = 0.5;
-      place.town = inTown(me.x, me.z, 40) ? 1 : 0;
-      let wet = 0;
-      for (const [ox, oz] of [[60, 0], [-60, 0], [0, 60], [0, -60]]) if (world.getHeight(me.x + ox, me.z + oz) < SEA_LEVEL) wet++;
-      place.sea = wet / 4;
-    }
-    audio.update(dt, { car: vehicle, onFoot: mode === "foot", inCabin: mode === "drive" && chase.modeName === "Driver", weather: weather.cur, place });
+    audio.update(dt, { car: vehicle, onFoot: mode === "foot", inCabin: mode === "drive" && chase.modeName === "Driver" });
 
     // Keep the guide line's progress marker moving.
     if (guide) {

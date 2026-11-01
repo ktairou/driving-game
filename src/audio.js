@@ -46,8 +46,6 @@ export class GameAudio {
   constructor() {
     this.ctx = null;
     this.enabled = true;
-    this.ambience = { birds: 0, town: 0, sea: 0, rain: 0, wind: 0 };
-    this._birdTimer = 0;
   }
 
   start() {
@@ -115,14 +113,6 @@ export class GameAudio {
     this.scrapeGain = gain(0);
     loop(white, 1.3).connect(filter("bandpass", 2600, 3)).connect(filter("highpass", 1100)).connect(this.scrapeGain).connect(this.master);
 
-    // --- Background ---------------------------------------------------------------
-    this.ambTown = gain(0);
-    loop(brown, 0.4).connect(filter("bandpass", 180, 0.8)).connect(this.ambTown).connect(this.master);
-    this.ambSea = gain(0);
-    this.seaFilter = filter("lowpass", 700);
-    loop(white, 0.5).connect(this.seaFilter).connect(this.ambSea).connect(this.master);
-    this.ambRain = gain(0);
-    loop(white).connect(filter("highpass", 900)).connect(filter("lowpass", 6500)).connect(this.ambRain).connect(this.master);
     this.white = white;
     this.brown = brown;
   }
@@ -185,35 +175,8 @@ export class GameAudio {
     this._burst("lowpass", 1200, 1, 1.4);
   }
 
-  thunder(distance) {
-    if (!this.ctx) return;
-    this._burst("lowpass", 160, clamp(1.4 - distance * 0.25, 0.4, 1.4), 3.5 + distance, this.brown);
-  }
-
-  // A little bird song: a few quick whistles that sweep in pitch.
-  _chirp(volume) {
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-    const notes = 2 + Math.floor(Math.random() * 4);
-    const base = 2400 + Math.random() * 2200;
-    for (let n = 0; n < notes; n++) {
-      const t = now + n * (0.09 + Math.random() * 0.05);
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(base * (1 + Math.random() * 0.2), t);
-      o.frequency.exponentialRampToValueAtTime(base * (0.7 + Math.random() * 0.6), t + 0.07);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(volume, t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-      o.connect(g).connect(this.master);
-      o.start(t);
-      o.stop(t + 0.1);
-    }
-  }
-
   // Called every frame. `car` is the vehicle (or null when walking).
-  update(dt, { car, onFoot, inCabin, weather, place }) {
+  update(dt, { car, onFoot, inCabin }) {
     if (!this.ctx || this.ctx.state !== "running") return;
     const speed = car ? car.speed : 0;
     const driving = car && !onFoot;
@@ -232,26 +195,5 @@ export class GameAudio {
     this._set(this.tyreGain.gain, driving && car.grounded ? slip * 0.22 * clamp(speed / 8, 0, 1) : 0);
     this._set(this.scrapeGain.gain, driving ? car.scrape * (0.3 + Math.random() * 0.15) : 0, 0.03);
     this._set(this.roadGain.gain, driving && car.grounded ? clamp(speed / 40, 0, 1) * 0.35 : 0);
-    // (No wind noise: it sounded like a jet taking off.) Fast driving still
-    // drowns out the background a little.
-    const windAmt = driving ? clamp((speed - 8) / 50, 0, 1) : 0;
-
-    // Background: depends on where you are and the weather.
-    const w = weather;
-    const rainy = w.rain;
-    const outdoorsQuiet = 1 - clamp(windAmt * 1.5, 0, 0.7);
-    this._set(this.ambTown.gain, place.town * 0.12 * outdoorsQuiet, 0.6);
-    const swell = 0.5 + 0.5 * Math.sin(performance.now() / 1900);
-    this._set(this.ambSea.gain, place.sea * (0.04 + swell * 0.06) * outdoorsQuiet, 0.3);
-    this._set(this.seaFilter.frequency, 400 + swell * 600, 0.3);
-    this._set(this.ambRain.gain, clamp(rainy, 0, 1.6) * (inCabin ? 0.12 : 0.18), 0.6);
-
-    // Birds sing in fine weather, away from towns.
-    const birdChance = (1 - place.town) * (1 - clamp(w.overcast * 1.2, 0, 1)) * (1 - w.flakes);
-    this._birdTimer -= dt;
-    if (this._birdTimer <= 0) {
-      this._birdTimer = 1.5 + Math.random() * 4;
-      if (Math.random() < birdChance) this._chirp(0.025 + Math.random() * 0.03);
-    }
   }
 }

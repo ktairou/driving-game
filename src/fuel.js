@@ -12,7 +12,8 @@ const WALK = 1.35; // walking speed, m/s
 
 export class Fuel {
   constructor(level = 1) {
-    this.level = clamp(level, FUEL_FLOOR, 1);
+    // (A missing or broken saved value means a full tank.)
+    this.level = Number.isFinite(level) ? clamp(level, FUEL_FLOOR, 1) : 1;
     this.electric = false;
     this.auto = false;
     this._warn = 0;
@@ -29,7 +30,7 @@ export class Fuel {
       // Uses more with your foot down and at speed; an electric car uses
       // next to nothing while standing still.
       const idle = this.electric ? 0.02 : 0.2;
-      const use = (idle + (1 - idle) * vehicle.throttle) * clamp(vehicle.speed / 22, 0.15, 1.6);
+      const use = (idle + (1 - idle) * (vehicle.throttle || 0)) * clamp((vehicle.speed || 0) / 22, 0.15, 1.6);
       this.level = Math.max(FUEL_FLOOR, this.level - dt * use * DRAIN);
     }
     if (this.level > 0.2) {
