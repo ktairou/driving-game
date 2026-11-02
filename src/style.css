@@ -582,10 +582,15 @@ button {
   font-size: 22px;
 }
 
+/* Scroll the side panel instead of squashing what's in it. */
+.map-side > * {
+  flex-shrink: 0;
+}
+
 .places {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .places button {
@@ -600,6 +605,52 @@ button {
   display: block;
   color: var(--muted);
   font-size: 11px;
+}
+
+.place-quick button {
+  width: 100%;
+}
+
+/* Countries and kinds of place: chips, the chosen one filled in. */
+.place-countries,
+.place-kinds {
+  display: grid;
+  gap: 6px;
+}
+
+.place-countries {
+  grid-template-columns: 1fr 1fr;
+}
+
+.place-kinds {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.place-countries button,
+.place-kinds button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.place-countries img {
+  height: 13px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.places button.on {
+  background: #f3f5f7;
+  color: #151b23;
+}
+
+.place-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .route-info {

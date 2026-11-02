@@ -9,7 +9,7 @@ import { buildTown } from "./world/town.js";
 import { buildLandmarks } from "./world/landmarks.js";
 import { buildNature } from "./world/nature.js";
 import { buildParks } from "./world/parks.js";
-import { buildFlags } from "./world/flags.js";
+import { buildFlags, flagPicture } from "./world/flags.js";
 import { SPAWN, LANE_OFFSET } from "./world/layout.js";
 import { loadCar, loadCarLod, loadVehicle, loadVehicleLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
@@ -428,29 +428,79 @@ async function start() {
     const p = playerPos();
     return stations.reduce((best, s) => (!best || Math.hypot(s.x - p.x, s.z - p.z) < Math.hypot(best.x - p.x, best.z - p.z) ? s : best), null);
   };
-  {
+  // (Listed under their country, so "Fuel station · Britain north" shows as "North".)
+  const shortName = (s) => {
+    const n = s.name.replace("Fuel station · ", "").replace(`${s.island.name} `, "");
+    return n[0].toUpperCase() + n.slice(1);
+  };
+  for (const s of stations) PLACES.push({ name: shortName(s), country: s.island.name, x: s.x, z: s.z, station: s });
+  // Places, a country at a time: pick a country, then its landmarks, towns or
+  // fuel stations. Starts on the country you're in.
+  const COUNTRIES = world.islands.map((isl) => ({ id: isl.def.id, name: isl.def.name, x: isl.def.cx, z: isl.def.cz, flag: flagPicture(isl.def.id) }));
+  const KINDS = [
+    ["landmark", "Landmarks"],
+    ["town", "Towns"],
+    ["fuel", "Fuel"],
+  ];
+  const kindOf = (p) => (p.station ? "fuel" : p.landmark ? "landmark" : "town");
+  let placeCountry = COUNTRIES[0];
+  let placeKind = "landmark";
+  const button = (parent, html, onClick, on = false) => {
     const b = document.createElement("button");
-    b.innerHTML = `Nearest fuel station<small>Fill up or charge</small>`;
-    b.addEventListener("click", () => {
+    b.innerHTML = html;
+    if (on) b.className = "on";
+    b.addEventListener("click", onClick);
+    parent.appendChild(b);
+    return b;
+  };
+  const row = (parent, cls) => {
+    const d = document.createElement("div");
+    d.className = cls;
+    parent.appendChild(d);
+    return d;
+  };
+  const renderPlaces = () => {
+    const box = $("places");
+    box.innerHTML = "";
+    button(row(box, "place-quick"), `Nearest fuel station<small>Fill up or charge</small>`, () => {
       const s = nearestStation();
       if (!s) return;
       pickDestination(s.x, s.z, s.name, s);
       bigmap.centreOn(s.x, s.z);
     });
-    $("places").appendChild(b);
-  }
-  for (const s of stations) PLACES.push({ name: s.name.replace("Fuel station · ", "Fuel · "), country: s.island.name, x: s.x, z: s.z, station: s });
-  for (const p of PLACES) {
-    const b = document.createElement("button");
-    b.innerHTML = `${p.name}<small>${p.country}</small>`;
-    b.addEventListener("click", () => {
-      pickDestination(p.x, p.z, p.name, p.station ?? null);
-      bigmap.centreOn(p.x, p.z);
-    });
-    $("places").appendChild(b);
-  }
+    const countries = row(box, "place-countries");
+    for (const c of COUNTRIES) {
+      button(countries, `<img src="${c.flag}" alt="">${c.name}`, () => {
+        placeCountry = c;
+        bigmap.centreOn(c.x, c.z);
+        renderPlaces();
+      }, c === placeCountry);
+    }
+    const kinds = row(box, "place-kinds");
+    for (const [k, label] of KINDS) {
+      button(kinds, label, () => {
+        placeKind = k;
+        renderPlaces();
+      }, k === placeKind);
+    }
+    const list = row(box, "place-list");
+    const me = playerPos();
+    for (const p of PLACES.filter((q) => q.country === placeCountry.name && kindOf(q) === placeKind)) {
+      const km = Math.hypot(p.x - me.x, p.z - me.z) / 1000;
+      button(list, `${p.name}<small>${km < 1 ? "Under 1 km away" : `${km.toFixed(1)} km away`}</small>`, () => {
+        pickDestination(p.x, p.z, p.station?.name ?? p.name, p.station ?? null);
+        bigmap.centreOn(p.x, p.z);
+      });
+    }
+  };
+  renderPlaces();
   $("minimap").addEventListener("click", () => {
     mapPanel.hidden = false;
+    // Start on the country you're in (on a bridge, keep the last one).
+    const here = playerPos();
+    const isl = world.islandAt(here.x, here.z);
+    placeCountry = COUNTRIES.find((c) => c.id === isl?.def.id) ?? placeCountry;
+    renderPlaces();
     const p = playerPos();
     bigmap.route = guide?.route ?? null;
     bigmap.destination = guide ? { x: guide.x, z: guide.z } : null;

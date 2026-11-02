@@ -146,6 +146,19 @@ const FLAGS = {
   usa: { draw: starsAndStripes, ratio: 1.9 },
 };
 
+// A small picture of a country's flag (for buttons), as an image address.
+export function flagPicture(id, width = 48) {
+  const f = FLAGS[id];
+  if (!f) return "";
+  const c = document.createElement("canvas");
+  c.width = width;
+  c.height = Math.round(width / f.ratio);
+  const ctx = c.getContext("2d");
+  ctx.scale(c.width / W, c.height / H);
+  f.draw(ctx);
+  return c.toDataURL();
+}
+
 function flagTexture(scene, id) {
   const t = new DynamicTexture(`flag_${id}`, { width: W, height: H }, scene, true);
   FLAGS[id].draw(t.getContext());
