@@ -1,22 +1,19 @@
-import { ISLANDS, SEA_LEVEL } from "./world/layout.js";
+import { ISLANDS, TOWNS, SEA_LEVEL, WORLD_SCALE } from "./world/layout.js";
 import { clamp } from "./noise.js";
 
 // World bounds shown on the map (metres) and map resolution.
-const X0 = -2650;
-const X1 = 2650;
-const Z0 = -2650;
-const Z1 = 950;
-const MPP = 4; // metres per map pixel
+const X0 = -2650 * WORLD_SCALE;
+const X1 = 2650 * WORLD_SCALE;
+const Z0 = -2650 * WORLD_SCALE;
+const Z1 = 950 * WORLD_SCALE;
+const MPP = 5; // metres per map pixel
 
+// Landmarks come first (they get labels on the big map); then every town.
+// More landmarks are added by the game as it sets them up.
 export const PLACES = [
-  { name: "Clock Tower", country: "Britain", x: -228, z: 10 },
-  { name: "Iron Tower", country: "France", x: 2010, z: -120 },
-  { name: "Pyramids", country: "Egypt", x: 60, z: -1820 },
-  { name: "Red Bridge", country: "USA", x: -1250, z: -24 },
-  { name: "Britain town", country: "Britain", x: -300, z: 0 },
-  { name: "Paris street", country: "France", x: 1890, z: 60 },
-  { name: "Egypt village", country: "Egypt", x: 0, z: -1510 },
-  { name: "Downtown", country: "USA", x: -1950, z: 330 },
+  ...ISLANDS.flatMap((isl) => isl.landmarks.filter((lm) => lm.name).map((lm) => ({ name: lm.name, country: isl.name, x: lm.x, z: lm.z, landmark: true, sea: !!lm.sea }))),
+  { name: "Red Bridge", country: "USA", x: -1250 * WORLD_SCALE, z: -24 * WORLD_SCALE, landmark: true },
+  ...TOWNS.map((t) => ({ name: t.name, country: ISLANDS.find((i) => i.id === t.island).name, x: t.cx, z: t.cz })),
 ];
 
 const toPx = (x, z) => [(x - X0) / MPP, (Z1 - z) / MPP];
@@ -43,7 +40,7 @@ function drawFuelBadge(c, x, y, r) {
 const toWorld = (px, py) => [X0 + px * MPP, Z1 - py * MPP];
 
 // Paints the whole world once: sea, beaches, hills (with shading), towns, roads.
-export function renderMapImage(world) {
+export function renderMapImage(world, parks = []) {
   const w = Math.round((X1 - X0) / MPP);
   const h = Math.round((Z1 - Z0) / MPP);
   const canvas = document.createElement("canvas");
@@ -93,10 +90,15 @@ export function renderMapImage(world) {
 
   // Towns
   ctx.fillStyle = "rgba(120, 112, 104, 0.55)";
-  for (const isl of ISLANDS) {
-    const t = isl.town;
+  for (const t of TOWNS) {
     const [ax, ay] = toPx(t.cx - t.hx, t.cz + t.hz);
     ctx.fillRect(ax, ay, (t.hx * 2) / MPP, (t.hz * 2) / MPP);
+  }
+  // Parks, in green over their town.
+  ctx.fillStyle = "rgba(86, 150, 70, 0.95)";
+  for (const p of parks) {
+    const [ax, ay] = toPx(p.x0, p.z1);
+    ctx.fillRect(ax, ay, (p.x1 - p.x0) / MPP, (p.z1 - p.z0) / MPP);
   }
   // Roads: dark edge, light middle.
   const drawRoad = (road, width, colour) => {
@@ -323,7 +325,7 @@ export class BigMap {
     // Landmark labels
     c.font = "600 13px -apple-system, Segoe UI, sans-serif";
     c.textAlign = "center";
-    for (const p of PLACES.slice(0, 4)) {
+    for (const p of PLACES.filter((q) => q.landmark)) {
       const [sx, sy] = screen(p.x, p.z);
       c.beginPath();
       c.arc(sx, sy, 6, 0, Math.PI * 2);

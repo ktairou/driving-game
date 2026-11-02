@@ -5,7 +5,7 @@ import { fbm, smoothstep } from "../noise.js";
 import { loadTexture } from "./materials.js";
 import { ROAD_HALF_WIDTH, SEA_LEVEL } from "./layout.js";
 
-const STEP = 5; // metres between terrain vertices
+const STEP = 6; // metres between terrain vertices
 const CHUNK = 64; // vertices per chunk side (so off-screen chunks are skipped)
 const GRASS_TILE = 6; // metres per ground texture repeat
 

@@ -1,4 +1,4 @@
-import { SpotLight, PointLight, Vector3, Color3, Mesh, VertexData, StandardMaterial, DynamicTexture, Engine, Matrix, Quaternion } from "@babylonjs/core";
+import { SpotLight, PointLight, Light, Vector3, Color3, Mesh, VertexData, StandardMaterial, DynamicTexture, Engine, Matrix, Quaternion } from "@babylonjs/core";
 import { smoothstep } from "./noise.js";
 
 // Everything that lights up after dark: street lamps (with pools of light on
@@ -19,7 +19,8 @@ function poolMesh(scene, world, spots, radius) {
         const v = j / n;
         const x = s.x + (u - 0.5) * 2 * radius;
         const z = s.z + (v - 0.5) * 2 * radius;
-        positions.push(x, world.getHeight(x, z) + 0.03, z);
+        // A little above the ground so it never flickers in and out of the road.
+        positions.push(x, world.getHeight(x, z) + 0.07, z);
         uvs.push(u, v);
       }
     }
@@ -95,7 +96,7 @@ export class NightLights {
     pm.alphaMode = Engine.ALPHA_ADD;
     pm.disableDepthWrite = true;
     pm.backFaceCulling = false;
-    pm.zOffset = -2;
+    pm.zOffset = -4;
     pm.fogEnabled = true;
     this.pool.material = pm;
     this.poolMat = pm;
@@ -104,10 +105,15 @@ export class NightLights {
     this.pool.setEnabled(false);
 
     // Your car's headlight beam: one real light, so the road ahead lights up.
-    this.beam = new SpotLight("headlights", new Vector3(0, 0.75, 2.3), new Vector3(0, -0.13, 1), Math.PI / 3.6, 14, scene);
+    // It fades evenly to nothing at its range (rather than the true fall-off,
+    // which made a glaring patch just ahead and darkness beyond), aims well
+    // down the road, and makes only a soft shine on shiny things.
+    this.beam = new SpotLight("headlights", new Vector3(0, 0.8, 2.3), new Vector3(0, -0.045, 1), Math.PI / 3, 5, scene);
     this.beam.parent = car.root;
-    this.beam.diffuse = new Color3(1, 0.95, 0.85);
-    this.beam.range = 70;
+    this.beam.diffuse = new Color3(1, 0.95, 0.86);
+    this.beam.specular = new Color3(0.25, 0.24, 0.22);
+    this.beam.falloffType = Light.FALLOFF_STANDARD;
+    this.beam.range = 95;
     this.beam.intensity = 0;
 
     // The two street lamps nearest you really light things up as well (cars,
@@ -116,7 +122,8 @@ export class NightLights {
     this.lamps = [0, 1].map((i) => {
       const l = new PointLight(`streetLamp${i}`, new Vector3(), scene);
       l.diffuse = new Color3(1, 0.76, 0.5);
-      l.specular = new Color3(0.5, 0.38, 0.25);
+      // Hardly any shine, so it doesn't make glaring reflections on the road.
+      l.specular = new Color3(0.1, 0.075, 0.05);
       // Always switched on (just at zero brightness by day): turning a light on
       // or off makes every surface rebuild its shader, which would make the
       // scene flicker for a moment at dusk.
@@ -138,7 +145,7 @@ export class NightLights {
     bm.alphaMode = Engine.ALPHA_ADD;
     bm.disableDepthWrite = true;
     bm.backFaceCulling = false;
-    bm.zOffset = -2;
+    bm.zOffset = -4;
     beams.material = bm;
     beams.isPickable = false;
     beams.alwaysSelectAsActiveMesh = true;
@@ -153,8 +160,8 @@ export class NightLights {
     this._v = new Vector3();
 
     const find = (mats, re) => mats.filter((m) => m && re.test(m.name));
-    this.carHead = find(car.materials, /^Headlight$/);
-    this.carTail = find(car.materials, /^Brakelight$/);
+    this._find = find;
+    this._carLights(car);
     const lodMats = lod.material?.subMaterials ?? [lod.material];
     this.lodHead = find(lodMats, /^Headlight$/);
     this.lodTail = find(lodMats, /^Brakelight$/);
@@ -166,6 +173,20 @@ export class NightLights {
   setCar(car) {
     this.car = car;
     this.beam.parent = car.root;
+    this._carLights(car);
+  }
+
+  _carLights(car) {
+    // The downloaded vehicles say which materials are their lamps; the concept car names them.
+    this.carHead = car.lights?.head ?? this._find(car.materials, /^Headlight$/);
+    this.carTail = car.lights?.tail ?? this._find(car.materials, /^Brakelight$/);
+    // Headlight beam from the front of this vehicle (a bus is much longer).
+    this.beam.position.z = (car.geometry.front ?? 2.5) - 0.2;
+  }
+
+  // Lamps of the traffic vehicles (each type's own materials).
+  addTrafficLights(materials) {
+    this.lodHead.push(...materials);
   }
 
   // `at` is where you are; `cars` is the traffic.
@@ -175,9 +196,10 @@ export class NightLights {
     this._updateLamps(on, at);
     this._updateBeams(on, at, cars);
     this.pool.setEnabled(on > 0.01);
-    this.poolMat.emissiveColor.set(on * 0.15, on * 0.15, on * 0.15);
-    this.town.lampGlow.emissiveColor.set(on * 4, on * 3.1, on * 2);
-    this.beam.intensity = on * 70;
+    this.poolMat.emissiveColor.set(on * 0.13, on * 0.13, on * 0.13);
+    // Bright enough to see, not so bright the glow round them shimmers.
+    this.town.lampGlow.emissiveColor.set(on * 2.2, on * 1.75, on * 1.15);
+    this.beam.intensity = on * 2.6;
 
     const set = (mats, r, g, b) => {
       for (const m of mats) {
@@ -190,7 +212,7 @@ export class NightLights {
     set(this.carTail, tail, tail * 0.05, tail * 0.03);
     set(this.lodHead, 3 * on, 2.9 * on, 2.6 * on);
     set(this.lodTail, on * 1.4, on * 0.07, on * 0.04);
-    for (const m of this.windows) m.emissiveColor.set(on * 0.95, on * 0.95, on * 0.95);
+    for (const m of this.windows) m.emissiveColor.set(on * 0.72, on * 0.72, on * 0.72);
     this.lattice?.emissiveColor.set(on * 0.9, on * 0.55, on * 0.2);
     this.clock?.emissiveColor.set(0.12 + on * 0.9, 0.11 + on * 0.85, 0.09 + on * 0.6);
   }
@@ -200,33 +222,29 @@ export class NightLights {
       for (const l of this.lamps) l.intensity = 0;
       return;
     }
-    // The nearest two lamps; each fades out as it gets further away, so
-    // handing a light on to the next lamp along doesn't show.
-    let a = null;
-    let b = null;
-    let da = Infinity;
-    let db = Infinity;
+    // The nearest two lamps get the two lights. Each light dims to nothing as
+    // the next lamp along catches up with it, so when it moves over to that
+    // lamp it's dark at the moment it moves: no jump, no flicker.
+    const near = [];
     for (const s of this.spots) {
-      const d = (s.x - at.x) ** 2 + (s.z - at.z) ** 2;
-      if (d < da) {
-        b = a;
-        db = da;
-        a = s;
-        da = d;
-      } else if (d < db) {
-        b = s;
-        db = d;
+      const d = Math.hypot(s.x - at.x, s.z - at.z);
+      if (near.length < 3 || d < near[2].d) {
+        near.push({ s, d });
+        near.sort((p, q) => p.d - q.d);
+        if (near.length > 3) near.pop();
       }
     }
-    [[a, da], [b, db]].forEach(([s, d2], i) => {
+    const third = near[2]?.d ?? Infinity;
+    for (let i = 0; i < 2; i++) {
       const l = this.lamps[i];
-      if (!s) {
+      const n = near[i];
+      if (!n) {
         l.intensity = 0;
-        return;
+        continue;
       }
-      l.position.set(s.x, s.y + (s.lightHeight ?? 7.2), s.z);
-      l.intensity = on * 60 * smoothstep(58, 30, Math.sqrt(d2));
-    });
+      l.position.set(n.s.x, n.s.y + (n.s.lightHeight ?? 7.2), n.s.z);
+      l.intensity = on * 55 * smoothstep(58, 30, n.d) * smoothstep(0, 22, third - n.d);
+    }
   }
 
   _updateBeams(on, at, cars) {

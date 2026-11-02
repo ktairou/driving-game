@@ -8,16 +8,16 @@ const DAY_SECONDS = 24 * 60;
 //   sky: which sky photo; sun/env: light strengths; exposure: camera brightness;
 //   fog: haze colour; tint: sunlight colour; night: 0 = day, 1 = street lights on.
 const KEYS = [
-  { h: 0, sky: "night", sun: 0.6, env: 2.8, exposure: 1.7, fog: [0.07, 0.09, 0.14], tint: [0.6, 0.7, 1], night: 1 },
-  { h: 4.9, sky: "night", sun: 0.6, env: 2.8, exposure: 1.7, fog: [0.07, 0.09, 0.14], tint: [0.6, 0.7, 1], night: 1 },
+  { h: 0, sky: "night", sun: 0.75, env: 3.4, exposure: 1.7, fog: [0.08, 0.1, 0.15], tint: [0.62, 0.72, 1], night: 1 },
+  { h: 4.9, sky: "night", sun: 0.75, env: 3.4, exposure: 1.7, fog: [0.08, 0.1, 0.15], tint: [0.62, 0.72, 1], night: 1 },
   { h: 5.9, sky: "sunset", sun: 1.3, env: 0.8, exposure: 1.3, fog: [0.46, 0.42, 0.45], tint: [1, 0.62, 0.4], night: 0.55 },
   { h: 7.2, sky: "day", sun: 3.6, env: 0.85, exposure: 1.05, fog: [0.62, 0.69, 0.77], tint: [1, 0.95, 0.9], night: 0 },
   { h: 8, sky: "day", sun: 4.2, env: 0.9, exposure: 1.05, fog: [0.64, 0.71, 0.79], tint: [1, 0.975, 0.945], night: 0 },
   { h: 17.5, sky: "day", sun: 4.2, env: 0.9, exposure: 1.05, fog: [0.64, 0.71, 0.79], tint: [1, 0.975, 0.945], night: 0 },
   { h: 18.6, sky: "day", sun: 3.1, env: 0.82, exposure: 1.08, fog: [0.66, 0.65, 0.66], tint: [1, 0.85, 0.7], night: 0 },
   { h: 19.4, sky: "sunset", sun: 2.0, env: 0.85, exposure: 1.2, fog: [0.62, 0.5, 0.42], tint: [1, 0.6, 0.35], night: 0.35 },
-  { h: 20.4, sky: "night", sun: 0.6, env: 2.8, exposure: 1.7, fog: [0.07, 0.09, 0.14], tint: [0.6, 0.7, 1], night: 1 },
-  { h: 24, sky: "night", sun: 0.6, env: 2.8, exposure: 1.7, fog: [0.07, 0.09, 0.14], tint: [0.6, 0.7, 1], night: 1 },
+  { h: 20.4, sky: "night", sun: 0.75, env: 3.4, exposure: 1.7, fog: [0.08, 0.1, 0.15], tint: [0.62, 0.72, 1], night: 1 },
+  { h: 24, sky: "night", sun: 0.75, env: 3.4, exposure: 1.7, fog: [0.08, 0.1, 0.15], tint: [0.62, 0.72, 1], night: 1 },
 ];
 
 export const TIME_PRESETS = [
@@ -133,6 +133,9 @@ export class DayNight {
     this.scene.fogColor.set(fog[0], fog[1], fog[2]);
     this.weather.domeMat.emissiveColor.set(fog[0] * (1 + w.flash), fog[1] * (1 + w.flash), fog[2] * (1 + w.flash));
     this.pipeline.imageProcessing.exposure = mix("exposure");
+    // A softer glow round lights at night: small bright lights otherwise bloom
+    // into big blobs that shimmer as you move.
+    this.pipeline.bloomWeight = lerp(0.22, 0.12, this.night);
     this.night = mix("night");
   }
 }

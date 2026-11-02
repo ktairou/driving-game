@@ -228,7 +228,7 @@ export class People {
       p.y = sp.y;
     }
     // Sightseers strolling round the landmarks.
-    const landmarks = ISLANDS.flatMap((isl) => isl.landmarks);
+    const landmarks = ISLANDS.flatMap((isl) => isl.landmarks).filter((lm) => !lm.sea);
     const tourists = quality.people - walkers;
     for (let i = 0; i < tourists; i++) {
       const lm = landmarks[i % landmarks.length];

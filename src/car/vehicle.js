@@ -60,8 +60,21 @@ export class Vehicle {
     this.L = this.a + this.b;
     this.halfTrack = g.halfTrack;
     this.mass = spec.mass ?? 1350;
-    this.inertia = this.mass * 1.7;
-    this.cgHeight = 0.5;
+    // Long vehicles (buses, lorries) are much harder to turn than a car.
+    this.inertia = this.mass * (g.length ? Math.max(1.7, (g.length ** 2 + (2 * g.halfWidth) ** 2) / 12) : 1.7);
+    this.cgHeight = g.height ? Math.max(0.5, g.height * 0.35) : 0.5;
+    this.wheelRadius = car.wheelRadius ?? WHEEL_RADIUS;
+    // Circles along the body that bump into things: from bumper to bumper.
+    if (g.front !== undefined) {
+      this.hitRadius = g.halfWidth * 0.95;
+      const first = g.front - this.hitRadius;
+      const last = g.rear + this.hitRadius;
+      const n = Math.max(3, Math.ceil((first - last) / (this.hitRadius * 1.3)) + 1);
+      this.hitOffsets = Array.from({ length: n }, (_, i) => first + ((last - first) * i) / (n - 1));
+    } else {
+      this.hitRadius = this.halfTrack * 0.98;
+      this.hitOffsets = [this.a - 0.15, 0, -this.b + 0.1];
+    }
     this.power = spec.power ?? 300000; // W
     this.maxDrive = spec.maxDrive ?? 10500; // N
     this.brakeForce = 15000 * (this.mass / 1350);
@@ -73,6 +86,11 @@ export class Vehicle {
     this.baseGrip = spec.grip ?? 1.15;
     this.redline = spec.redline ?? 7800;
     this.gears = spec.gears ?? [3.2, 2.2, 1.65, 1.3, 1.05, 0.86];
+  }
+
+  // Bumper to bumper, in metres.
+  get length() {
+    return this.car.geometry.length ?? 4.6;
   }
 
   get grip() {
@@ -315,7 +333,7 @@ export class Vehicle {
     }
 
     // --- Engine revs (for the sound): a simple automatic gearbox -------------
-    const wheelRpm = (Math.abs(vLong) / WHEEL_RADIUS) * 9.549;
+    const wheelRpm = (Math.abs(vLong) / this.wheelRadius) * 9.549;
     const finalDrive = 3.4;
     let geared = wheelRpm * this.gears[this.gear - 1] * finalDrive;
     if (geared > this.redline * 0.9 && this.gear < this.gears.length) this.gear++;
@@ -333,7 +351,7 @@ export class Vehicle {
     this.bodyRollVel += ((rollTarget - this.bodyRoll) * 110 - this.bodyRollVel * 11) * dt;
     this.bodyRoll += this.bodyRollVel * dt;
 
-    this.wheelSpin += (vLong / WHEEL_RADIUS) * dt;
+    this.wheelSpin += (vLong / this.wheelRadius) * dt;
     this.speed = speed;
     this.forwardSpeed = vLong;
   }
@@ -352,9 +370,9 @@ export class Vehicle {
     // Three circles along the car's length.
     const s = Math.sin(this.heading);
     const c = Math.cos(this.heading);
-    const radius = this.halfTrack * 0.98;
+    const radius = this.hitRadius;
     let scrape = 0;
-    for (const off of [this.a - 0.15, 0, -this.b + 0.1]) {
+    for (const off of this.hitOffsets) {
       const cx = this.x + s * off;
       const cz = this.z + c * off;
       let hit = this.colliders.resolveCircle(cx, cz, radius);
@@ -462,7 +480,7 @@ export class Vehicle {
     wheels.forEach((w, i) => {
       w.steer.rotation.y = w.front ? this.steer : 0;
       w.spin.rotation.x = this.wheelSpin;
-      const groundAt = this.wheelGround ? this.wheelGround[i] : this.y;
+      const groundAt = this.wheelGround ? this.wheelGround[w.groundIndex ?? i] : this.y;
       const target = this.grounded ? clamp(groundAt - planeAt(w.rest.z, w.rest.x), -0.1, 0.1) : -0.08;
       w.offset = lerp(w.offset, target, 0.3);
       w.steer.position.y = w.rest.y + w.offset;

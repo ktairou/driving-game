@@ -208,6 +208,83 @@ function buildIronTower(scene, lm, ground, colliders) {
   ];
 }
 
+// The Hollywood sign: nine white letters standing on a hillside, each at its
+// own height on the slope, propped up by a frame behind. Drawn from a picture
+// of the letters so they keep the real sign's tall, plain shapes.
+function buildHollywoodSign(scene, lm, world, colliders) {
+  const word = "HOLLYWOOD";
+  const cellW = 128;
+  const tex = new DynamicTexture("hollywoodLetters", { width: cellW * word.length, height: 256 }, scene, true);
+  const c = tex.getContext();
+  c.clearRect(0, 0, cellW * word.length, 256);
+  c.fillStyle = "#ffffff";
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.font = "bold 250px Arial, Helvetica, sans-serif";
+  for (let i = 0; i < word.length; i++) {
+    c.save();
+    c.translate(cellW * (i + 0.5), 136);
+    c.scale(0.62, 1); // narrow, like the real letters
+    c.fillText(word[i], 0, 0);
+    c.restore();
+  }
+  tex.update(true);
+  tex.hasAlpha = true;
+  tex.wrapU = tex.wrapV = 0; // clamp
+
+  const white = new PBRMaterial("hollywoodWhite", scene);
+  white.albedoTexture = tex;
+  white.useAlphaFromAlbedoTexture = true;
+  white.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST;
+  white.alphaCutOff = 0.5;
+  white.albedoColor = rgb(0.95, 0.95, 0.93);
+  white.metallic = 0;
+  white.roughness = 0.7;
+  white.backFaceCulling = false;
+  white.twoSidedLighting = true;
+  const frameMat = plainMaterial(scene, "hollywoodFrame", rgb(0.22, 0.22, 0.22), { metallic: 0.5, roughness: 0.6 });
+
+  const letterW = 11;
+  const letterH = 14;
+  const gap = 1.5;
+  const total = word.length * letterW + (word.length - 1) * gap;
+  const g = new GeometryBuilder();
+  const frames = [];
+  // The sign faces north (towards Springfield): letters run west to east.
+  const n = [0, 0, -1];
+  for (let i = 0; i < word.length; i++) {
+    const x0 = lm.x - total / 2 + i * (letterW + gap);
+    const x1 = x0 + letterW;
+    // A little uneven, like the real one.
+    const dz = Math.sin(i * 2.3) * 1.5;
+    const z = lm.z + dz;
+    const y = Math.min(world.getHeight(x0, z), world.getHeight(x1, z), world.getHeight((x0 + x1) / 2, z)) + 1.2;
+    const u0 = i / word.length;
+    const u1 = (i + 1) / word.length;
+    const a = g.addVertex([x0, y, z], n, [u0, 0]);
+    const b = g.addVertex([x1, y, z], n, [u1, 0]);
+    const t = g.addVertex([x1, y + letterH, z + 0.6], n, [u1, 1]);
+    const d = g.addVertex([x0, y + letterH, z + 0.6], n, [u0, 1]);
+    g.addTriangle(a, b, t, n);
+    g.addTriangle(a, t, d, n);
+    // Two posts and a brace behind each letter.
+    for (const px of [x0 + letterW * 0.3, x0 + letterW * 0.7]) {
+      const ground = world.getHeight(px, z + 1.2);
+      const post = MeshBuilder.CreateBox("hwPost", { width: 0.25, depth: 0.25, height: y + letterH - 1 - ground + 1 }, scene);
+      post.position.set(px, (ground - 1 + y + letterH - 1) / 2, z + 1.2);
+      frames.push(post);
+    }
+    const brace = MeshBuilder.CreateBox("hwBrace", { width: letterW * 0.75, depth: 0.2, height: 0.25 }, scene);
+    brace.position.set((x0 + x1) / 2, y + letterH * 0.55, z + 1.1);
+    frames.push(brace);
+  }
+  colliders.addBox(lm.x, lm.z + 0.6, total / 2, 2.5);
+  return [
+    [g.toMesh("hollywoodSign", scene), white],
+    [Mesh.MergeMeshes(frames, true, true), frameMat],
+  ];
+}
+
 function buildPyramid(scene, lm, ground, colliders, material) {
   const g = new GeometryBuilder();
   const h = lm.base / 2;
@@ -245,6 +322,7 @@ export function buildLandmarks(scene, world, colliders) {
       if (lm.type === "clockTower") made = buildClockTower(scene, lm, ground, colliders);
       else if (lm.type === "ironTower") made = buildIronTower(scene, lm, ground, colliders);
       else if (lm.type === "pyramid") made = buildPyramid(scene, lm, ground, colliders, sandstone);
+      else if (lm.type === "hollywood") made = buildHollywoodSign(scene, lm, world, colliders);
       for (const [mesh, mat] of made) {
         mesh.material = mat;
         mesh.receiveShadows = true;

@@ -30,22 +30,9 @@ function dotTexture(scene, name, stops) {
 
 export class CarDamage {
   constructor(scene, car) {
-    this.car = car;
     this.damage = 0; // 0 = like new, 1 = badly smashed
     this._sparkTimer = 0;
-
-    // Keep each bendable part's original shape so it can be repaired.
-    const toBody = Matrix.Invert(car.body.computeWorldMatrix(true));
-    this.parts = car.meshes
-      .filter((m) => DENTABLE.test(m.name))
-      .map((mesh) => {
-        const pos = Float32Array.from(mesh.getVerticesData("position"));
-        const nrm = Float32Array.from(mesh.getVerticesData("normal"));
-        // Car-body space -> this part's own space.
-        const toLocal = Matrix.Invert(mesh.computeWorldMatrix(true).multiply(toBody));
-        const bb = mesh.getBoundingInfo().boundingBox;
-        return { mesh, pos, nrm, orig: pos.slice(), origNrm: nrm.slice(), moved: new Float32Array(pos.length / 3), toLocal, min: bb.minimum.clone(), max: bb.maximum.clone(), editable: false, bent: false };
-      });
+    this.setCar(car);
 
     // Sparks: short-lived bright streaks that fall with gravity.
     const sparks = new ParticleSystem("sparks", 400, scene);
@@ -91,6 +78,25 @@ export class CarDamage {
     smoke.createPointEmitter(new Vector3(-0.35, 1, -0.35), new Vector3(0.35, 1.6, 0.35));
     smoke.start();
     this.smoke = smoke;
+  }
+
+  // Use this car (after swapping to another one): its bendable panels, like new.
+  setCar(car) {
+    this.car = car;
+    this.damage = 0;
+    if (this.smoke) this.smoke.emitRate = 0;
+    // Keep each bendable part's original shape so it can be repaired.
+    const toBody = Matrix.Invert(car.body.computeWorldMatrix(true));
+    this.parts = car.meshes
+      .filter((m) => DENTABLE.test(m.name))
+      .map((mesh) => {
+        const pos = Float32Array.from(mesh.getVerticesData("position"));
+        const nrm = Float32Array.from(mesh.getVerticesData("normal"));
+        // Car-body space -> this part's own space.
+        const toLocal = Matrix.Invert(mesh.computeWorldMatrix(true).multiply(toBody));
+        const bb = mesh.getBoundingInfo().boundingBox;
+        return { mesh, pos, nrm, orig: pos.slice(), origNrm: nrm.slice(), moved: new Float32Array(pos.length / 3), toLocal, min: bb.minimum.clone(), max: bb.maximum.clone(), editable: false, bent: false };
+      });
   }
 
   // Called by the car for each real knock. `hit` is in world space plus the

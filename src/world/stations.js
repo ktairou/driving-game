@@ -30,8 +30,8 @@ const DEVICES = [
 const SPOT_U = [-3.8, 3.8];
 const BLEND = 12; // metres of ground blended from the forecourt level back to nature
 
-// Picks where the stations go (one per country near its town, plus two out
-// on country roads) and levels the ground under them.
+// Picks where the stations go (one near every town, plus three out on each
+// country's country roads) and levels the ground under them.
 export function planStations(world) {
   const net = world.network;
   const cands = [];
@@ -49,11 +49,11 @@ export function planStations(world) {
       const [ox, oz] = road.points[i];
       if (inTown(ox, oz, 50) || net.isNearMeeting(ox, oz, 55)) continue;
       const y = road.heights[i];
-      if (Math.abs(road.heights[at(i + 9)] - road.heights[at(i - 9)]) > 0.6) continue;
+      if (Math.abs(road.heights[at(i + 9)] - road.heights[at(i - 9)]) > 1.0) continue;
       const [tx, tz] = road.tangents[i];
       const [ax, az] = road.tangents[at(i - 9)];
       const [bx, bz] = road.tangents[at(i + 9)];
-      if (ax * bx + az * bz < 0.975 || ax * tx + az * tz < 0.985) continue; // fairly straight
+      if (ax * bx + az * bz < 0.96 || ax * tx + az * tz < 0.98) continue; // fairly straight
       const nx = side * tz;
       const nz = -side * tx;
       let ok = true;
@@ -70,31 +70,42 @@ export function planStations(world) {
           if (!ok) break;
         }
       }
-      if (!ok || rough > 4) continue;
-      const t = def.town;
-      cands.push({ road, index: i, island: def, side, ox, oz, tx, tz, nx, nz, y, rough, toTown: Math.hypot(ox - t.cx, oz - t.cz) });
+      if (!ok || rough > 6) continue;
+      cands.push({ road, index: i, island: def, side, ox, oz, tx, tz, nx, nz, y, rough });
     }
   }
 
-  // One per country, a little way out of its town...
+  // One just outside every town...
   const chosen = [];
+  const gap = (c) => Math.min(Infinity, ...chosen.map((s) => Math.hypot(s.ox - c.ox, s.oz - c.oz)));
   for (const def of ISLANDS) {
-    const mine = cands.filter((c) => c.island === def);
-    mine.sort((a, b) => Math.abs(a.toTown - 380) / 120 + a.rough - (Math.abs(b.toTown - 380) / 120 + b.rough));
-    if (mine.length) chosen.push({ ...mine[0], name: `Fuel station · ${def.name}` });
-  }
-  // ...then two more out in the country, as far from the others as possible.
-  for (let k = 0; k < 2; k++) {
-    let best = null;
-    let bestD = 450;
-    for (const c of cands) {
-      const d = Math.min(...chosen.map((s) => Math.hypot(s.ox - c.ox, s.oz - c.oz)));
-      if (d > bestD) {
-        bestD = d;
-        best = c;
-      }
+    for (const t of def.towns) {
+      const want = Math.max(t.hx, t.hz) + 180;
+      const score = (c) => Math.abs(Math.hypot(c.ox - t.cx, c.oz - t.cz) - want) / 120 + c.rough;
+      const mine = cands.filter((c) => c.island === def && gap(c) > 350).sort((p, q) => score(p) - score(q));
+      if (mine.length) chosen.push({ ...mine[0], name: `Fuel station · ${t.name}` });
     }
-    if (best) chosen.push({ ...best, name: `Fuel station · ${best.island.name} countryside` });
+  }
+  // ...then three more out in each country's countryside, as far from the others as possible.
+  const DIRS = ["east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"];
+  const compass = (c, def) => DIRS[Math.round(Math.atan2(c.oz - def.cz, c.ox - def.cx) / (Math.PI / 4) + 8) % 8];
+  for (const def of ISLANDS) {
+    for (let k = 0; k < 3; k++) {
+      let best = null;
+      let bestD = 420;
+      for (const c of cands) {
+        if (c.island !== def) continue;
+        const d = gap(c);
+        if (d > bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      if (!best) continue;
+      let name = `Fuel station · ${def.name} ${compass(best, def)}`;
+      if (chosen.some((o) => o.name === name)) name += " 2";
+      chosen.push({ ...best, name });
+    }
   }
 
   const stations = chosen.map((c, id) => {
@@ -112,6 +123,11 @@ export function planStations(world) {
   for (const s of stations) levelGround(world, s);
   world.clearAreas = (world.clearAreas ?? []).concat(stations.map((s) => ({ x: s.x, z: s.z, r: Math.hypot(PAD_U, PAD_W) + 8 })));
   return stations;
+}
+
+// Where a station's flag goes: just behind the forecourt, at the end you drive in.
+export function stationFlagSpot(s) {
+  return s.at(-PAD_U + 1, EDGE + PAD_W + 2.5);
 }
 
 // Station-frame coordinates of a world point.

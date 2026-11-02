@@ -160,7 +160,8 @@ function instanceBySector(template, items, makeMatrix, withColor) {
   return meshes;
 }
 
-export function buildNature(scene, world, colliders, quality) {
+// extraTrees: [{ x, z, y }] planted on top of the countryside ones (the parks' trees).
+export function buildNature(scene, world, colliders, quality, extraTrees = []) {
   const rand = mulberry32(4242);
   const forest = createNoise2D(77);
 
@@ -196,6 +197,7 @@ export function buildNature(scene, world, colliders, quality) {
     }
     chosen.push(...spots.slice(0, Math.round((quality.trees * def.trees.share) / totalShare)));
   }
+  for (const t of extraTrees) chosen.push({ ...t, r: rand(), firAbove: Infinity });
   const broad = [];
   const firs = [];
   for (const s of chosen) {

@@ -245,12 +245,13 @@ export async function buildTown(scene, world, colliders) {
   };
   const lampMatrices = [];
   const pavementSpots = [];
+  const parks = [];
+  const roofs = []; // tops of tall buildings, for flags
 
-  for (const isl of ISLANDS) {
-    const t = isl.town;
+  for (const isl of ISLANDS) for (const [ti, t] of isl.towns.entries()) {
     const st = STYLES[t.style];
     const set = facades[t.style];
-    const rand = mulberry32(isl.seed * 97);
+    const rand = mulberry32(isl.seed * 97 + ti * 13);
     const ground = t.height;
     const { x0: sx0, x1: sx1, z: sz } = t.street;
     const reserved = isl.landmarks.map((lm) => {
@@ -259,8 +260,11 @@ export async function buildTown(scene, world, colliders) {
     });
     // Side streets through town: keep buildings, pavement and lamps off them.
     const sideSamples = [];
+    // (The road the main street is part of doesn't count.)
+    const onStreet = (r) => r.points.filter(([x, z]) => x > sx0 && x < sx1 && Math.abs(z - sz) < 3).length;
+    const mainRoad = world.network.roads.reduce((best, r) => (onStreet(r) > onStreet(best) ? r : best));
     for (const r of world.network.roads) {
-      if (r.id === isl.id) continue;
+      if (r === mainRoad) continue;
       for (const [x, z] of r.points) if (Math.abs(x - t.cx) < t.hx + 40 && Math.abs(z - t.cz) < t.hz + 40) sideSamples.push([x, z]);
     }
     const crossXs = sideSamples.filter(([, z]) => Math.abs(z - sz) < 12).map(([x]) => x);
@@ -268,6 +272,33 @@ export async function buildTown(scene, world, colliders) {
     const blocked = (a0, a1, b0, b1) =>
       reserved.some(([x0, x1, z0, z1]) => a1 > x0 && a0 < x1 && b1 > z0 && b0 < z1) ||
       sideSamples.some(([x, z]) => x > a0 - 8 && x < a1 + 8 && z > b0 - 8 && z < b1 + 8);
+
+    // A big park beside the main street, in place of a row of buildings
+    // (on the other side of the street from town to town).
+    {
+      const side = ti % 2 === 0 ? 1 : -1;
+      const near = sz + side * (BUILD_LINE - 0.5);
+      const far = sz + side * (BUILD_LINE + 95);
+      const z0 = Math.min(near, far);
+      const z1 = Math.max(near, far);
+      const mid0 = (sx0 + sx1) / 2 + (rand() - 0.5) * (sx1 - sx0) * 0.2;
+      // As big as fits: slide it along (and if need be shrink it) to keep it
+      // clear of side streets and landmarks.
+      let park = null;
+      for (const width of [Math.min(170, (sx1 - sx0) * 0.38), 120, 90]) {
+        for (let k = 0; k < 13 && !park; k++) {
+          const mid = mid0 + (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 22;
+          if (mid - width / 2 < sx0 || mid + width / 2 > sx1) continue;
+          if (onSideStreet(mid, width / 2 + 12) || blocked(mid - width / 2, mid + width / 2, z0, z1)) continue;
+          park = { x0: mid - width / 2, x1: mid + width / 2, z0, z1, y: ground, side, street: sz, town: t, seed: isl.seed * 31 + ti };
+        }
+        if (park) break;
+      }
+      if (park) {
+        reserved.push([park.x0, park.x1, park.z0, park.z1]);
+        parks.push(park);
+      }
+    }
 
     for (const side of [-1, 1]) {
       let x = sx0 - 5 + rand() * 6;
@@ -291,6 +322,7 @@ export async function buildTown(scene, world, colliders) {
         addBox(builder(mat), x, xe, zA, zB, ground - 1, top, ground);
         if (st.mansard) addMansard(builder(slate), x, xe, zA, zB, top, 4.2, 2.2);
         else addRoof(builder(roofMat), x, xe, zA, zB, top);
+        roofs.push({ x: (x + xe) / 2, z: (zA + zB) / 2, y: top + (st.mansard ? 4.2 : 0), floors, island: isl.id });
         colliders.addBox((x + xe) / 2, (zA + zB) / 2, (xe - x) / 2, (zB - zA) / 2);
         x = xe + 3 + rand() * 7;
       }
@@ -371,5 +403,5 @@ export async function buildTown(scene, world, colliders) {
     m.isPickable = false;
     if (m !== lamp && m !== head) m.freezeWorldMatrix();
   }
-  return { meshes, casters, pavementSpots, lampSpots, lampGlow: glow };
+  return { meshes, casters, pavementSpots, lampSpots, lampGlow: glow, parks, roofs };
 }

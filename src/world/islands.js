@@ -18,23 +18,51 @@ export class Island {
     this.size = Math.round((2 * def.half) / CELL) + 1;
     this.cell = CELL;
     // Flat ground under landmarks, at whatever height the land is there.
-    this.plateaus = def.landmarks.map((lm) => ({
+    this.plateaus = def.landmarks.filter((lm) => lm.plateau !== false).map((lm) => ({
       x: lm.x,
       z: lm.z,
       r: (lm.base ?? 40) * 0.75 + 25,
       h: Math.max(4, this._natural(lm.x, lm.z)),
     }));
+    // Extra hills some landmarks stand on (the Hollywood sign), centred dz metres south of them.
+    this.hills = def.landmarks.filter((lm) => lm.hill).map((lm) => ({ x: lm.x, z: lm.z + (lm.hill.dz ?? 0), r: lm.hill.r, h: lm.hill.h }));
+    // Each town sits on flat ground at about the height the land has there.
+    for (const t of def.towns) {
+      if (t.height !== undefined) continue;
+      let sum = 0;
+      let n = 0;
+      for (let i = 0; i <= 6; i++) {
+        for (let j = 0; j <= 4; j++) {
+          sum += this._natural(t.cx + (i / 6 - 0.5) * 2 * t.hx, t.cz + (j / 4 - 0.5) * 2 * t.hz);
+          n++;
+        }
+      }
+      t.height = Math.max(4, sum / n);
+    }
   }
 
   contains(x, z) {
     return x >= this.minX && z >= this.minZ && x <= this.minX + 2 * this.def.half && z <= this.minZ + 2 * this.def.half;
   }
 
+  // How much (0..1) a point belongs to a town's flat ground, and that town's height.
+  townBlend(x, z, margin) {
+    let w = 0;
+    let h = 0;
+    for (const t of this.def.towns) {
+      const dx = Math.max(Math.abs(x - t.cx) - t.hx, 0);
+      const dz = Math.max(Math.abs(z - t.cz) - t.hz, 0);
+      const tw = 1 - smoothstep(0, margin, Math.hypot(dx, dz));
+      if (tw > w) {
+        w = tw;
+        h = t.height;
+      }
+    }
+    return { w, h };
+  }
+
   townWeight(x, z, margin) {
-    const t = this.def.town;
-    const dx = Math.max(Math.abs(x - t.cx) - t.hx, 0);
-    const dz = Math.max(Math.abs(z - t.cz) - t.hz, 0);
-    return 1 - smoothstep(0, margin, Math.hypot(dx, dz));
+    return this.townBlend(x, z, margin).w;
   }
 
   // Land shape before towns, landmarks and roads.
@@ -63,8 +91,10 @@ export class Island {
 
   baseHeight(x, z) {
     let h = this._natural(x, z);
+    for (const k of this.hills) h += k.h * (1 - smoothstep(0, k.r, Math.hypot(x - k.x, z - k.z)));
     for (const p of this.plateaus) h = lerp(p.h, h, smoothstep(p.r, p.r + 50, Math.hypot(x - p.x, z - p.z)));
-    return lerp(h, this.def.town.height, this.townWeight(x, z, 90));
+    const town = this.townBlend(x, z, 90);
+    return lerp(h, town.h, town.w);
   }
 
   // Build the height grid, carving in every road (or road piece) on this island.

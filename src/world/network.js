@@ -117,7 +117,10 @@ export class RoadNetwork {
       const bridge = points.map(([x, z]) => world.baseHeight(x, z) < 1.5);
       raw.forEach((v, i) => bridge[i] && (raw[i] = BRIDGE_DECK.beam));
       smoothHeights(raw, true, 22, 4);
-      for (let i = 0; i < points.length; i++) raw[i] = lerp(raw[i], isl.town.height, island.townWeight(points[i][0], points[i][1], 70));
+      for (let i = 0; i < points.length; i++) {
+        const town = island.townBlend(points[i][0], points[i][1], 70);
+        raw[i] = lerp(raw[i], town.h, town.w);
+      }
       limitGrade(raw, true, 0.09);
       this._add({ id: isl.id, island: isl.id, closed: true, points, heights: raw, bridge, drive: isl.drive, style: null });
     }
@@ -138,7 +141,12 @@ export class RoadNetwork {
       smoothHeights(h, false, 22, 4);
       const n = points.length;
       // Flat through towns, like the main streets they cross.
-      for (const isl of world.islands) for (let i = 0; i < n; i++) h[i] = lerp(h[i], isl.def.town.height, isl.townWeight(points[i][0], points[i][1], 70));
+      for (const isl of world.islands) {
+        for (let i = 0; i < n; i++) {
+          const town = isl.townBlend(points[i][0], points[i][1], 70);
+          h[i] = lerp(h[i], town.h, town.w);
+        }
+      }
       const startJ = this._snap(points[0]);
       const endJ = this._snap(points[n - 1]);
       for (let i = 0; i < n; i++) {

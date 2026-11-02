@@ -1,26 +1,24 @@
 import { MeshBuilder, Mesh, Vector3 } from "@babylonjs/core";
 import { GeometryBuilder, normalize, cross } from "../geom.js";
 import { surfaceMaterial, plainMaterial, rgb } from "./materials.js";
-import { ISLANDS, ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./layout.js";
+import { TOWNS, ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./layout.js";
 import { SEA_FLOOR } from "./islands.js";
 
 const LIFT = 0.04; // road surface sits this far above the height grid
 const ASPHALT_TILE = 7; // metres per asphalt texture repeat
 
+// The town a point is in (with a margin around each), or null.
+export function townAt(x, z, margin = 0) {
+  for (const t of TOWNS) if (Math.abs(x - t.cx) < t.hx + margin && Math.abs(z - t.cz) < t.hz + margin) return t;
+  return null;
+}
+
 export function inTown(x, z, margin = 0) {
-  for (const isl of ISLANDS) {
-    const t = isl.town;
-    if (Math.abs(x - t.cx) < t.hx + margin && Math.abs(z - t.cz) < t.hz + margin) return true;
-  }
-  return false;
+  return townAt(x, z, margin) !== null;
 }
 
 export function onMainStreet(x, z) {
-  for (const isl of ISLANDS) {
-    const s = isl.town.street;
-    if (x > s.x0 && x < s.x1 && Math.abs(z - s.z) < 15) return true;
-  }
-  return false;
+  return TOWNS.some((t) => x > t.street.x0 && x < t.street.x1 && Math.abs(z - t.street.z) < 15);
 }
 
 // Per-sample frame: centre point, right vector and surface normal.

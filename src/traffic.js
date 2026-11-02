@@ -10,7 +10,22 @@ export const CAR_COLOURS = [
 ];
 
 const DRAW_RANGE = 480; // cars further than this from the camera aren't drawn
-const CAR_RADIUS = 1.0;
+
+// Which vehicles drive about, and how common each one is. "more" ones only
+// on the higher graphics settings (each kind costs graphics memory). Parked
+// ones are only the everyday kinds.
+export const TRAFFIC_MIX = [
+  { id: "sedan", weight: 3, parked: true },
+  { id: "hatchback", weight: 3, parked: true },
+  { id: "suv", weight: 2, parked: true },
+  { id: "compact", weight: 2, parked: true },
+  { id: "taxi", weight: 1.4, parked: true },
+  { id: "citybus", weight: 0.7 },
+  { id: "wagon", weight: 2, parked: true, more: true },
+  { id: "pickup", weight: 1.4, parked: true, more: true },
+  { id: "police", weight: 0.6, more: true },
+  { id: "postvan", weight: 0.8, parked: true, more: true },
+];
 
 // Point and direction at a fractional sample position along a road.
 function sampleRoad(road, s) {
@@ -42,21 +57,16 @@ function sampleRoad(road, s) {
 }
 
 // Cars driving round the roads by themselves, plus cars parked in towns.
-// All of them are drawn as one instanced mesh.
+// Each kind of vehicle is drawn as one instanced mesh.
+//   types: [{ id, mesh, length, halfWidth, weight, parked, coloured }]
 export class Traffic {
-  constructor(scene, world, mesh, quality) {
+  constructor(scene, world, types, quality) {
     this.world = world;
-    this.mesh = mesh;
     this.rand = mulberry32(1234);
     this.cars = [];
     this.maxInstances = quality.traffic + quality.parked + 4;
-    this.matrices = new Float32Array(this.maxInstances * 16);
-    this.colours = new Float32Array(this.maxInstances * 4);
-    mesh.thinInstanceSetBuffer("matrix", this.matrices, 16, false);
-    mesh.thinInstanceSetBuffer("color", this.colours, 4, false);
-    mesh.thinInstanceCount = 0;
-    mesh.alwaysSelectAsActiveMesh = true;
-    mesh.receiveShadows = true;
+    this.types = [];
+    for (const t of types) this.addType(t);
 
     // Junction lookup: which samples of a loop lead onto a connector.
     this.junctionsByRoad = new Map();
@@ -78,6 +88,33 @@ export class Traffic {
     return CAR_COLOURS[Math.floor(this.rand() * CAR_COLOURS.length)];
   }
 
+  // Another kind of vehicle (e.g. the one you have just got out of).
+  addType(t) {
+    const type = { weight: 0, parked: false, coloured: false, ...t, count: 0 };
+    type.matrices = new Float32Array(this.maxInstances * 16);
+    type.mesh.thinInstanceSetBuffer("matrix", type.matrices, 16, false);
+    if (type.coloured) {
+      type.colours = new Float32Array(this.maxInstances * 4);
+      type.mesh.thinInstanceSetBuffer("color", type.colours, 4, false);
+    }
+    type.mesh.thinInstanceCount = 0;
+    type.mesh.alwaysSelectAsActiveMesh = true;
+    type.mesh.receiveShadows = true;
+    this.types.push(type);
+    return type;
+  }
+
+  type(id) {
+    return this.types.find((t) => t.id === id);
+  }
+
+  _pickType(parked) {
+    const list = this.types.filter((t) => t.weight > 0 && (!parked || t.parked));
+    let r = this.rand() * list.reduce((s, t) => s + t.weight, 0);
+    for (const t of list) if ((r -= t.weight) <= 0) return t;
+    return list[0];
+  }
+
   _addMoving(road, s, dir) {
     const car = {
       moving: true,
@@ -88,6 +125,7 @@ export class Traffic {
       cruise: 13 + this.rand() * 8,
       lane: 0,
       stopTimer: 0,
+      type: this._pickType(false),
       colour: this._colour(),
       x: 0,
       y: 0,
@@ -104,8 +142,8 @@ export class Traffic {
   _addParked(count) {
     // Along the kerb of each town's main street.
     const spots = [];
-    for (const isl of ISLANDS) {
-      const s = isl.town.street;
+    for (const isl of ISLANDS) for (const town of isl.towns) {
+      const s = town.street;
       for (let x = s.x0 + 14; x < s.x1 - 14; x += 22) {
         for (const side of [-1, 1]) {
           const px = x + (this.rand() - 0.5) * 6;
@@ -126,12 +164,13 @@ export class Traffic {
     for (const sp of spots.slice(0, count)) {
       // Park facing the way traffic flows on that side of the road.
       const flowEast = (sp.isl.drive === "left") === (sp.side > 0);
-      this.addParked(sp.x, sp.z, flowEast ? Math.PI / 2 : -Math.PI / 2, this._colour());
+      this.addParked(sp.x, sp.z, flowEast ? Math.PI / 2 : -Math.PI / 2, this._colour(), this._pickType(true).id);
     }
   }
 
-  addParked(x, z, yaw, colour) {
-    const car = { moving: false, x, z, y: this.world.getHeight(x, z), yaw, pitch: 0, colour };
+  addParked(x, z, yaw, colour, typeId) {
+    const type = this.type(typeId) ?? this._pickType(true);
+    const car = { moving: false, x, z, y: this.world.getHeight(x, z), yaw, pitch: 0, colour, type };
     this.cars.push(car);
     return car;
   }
@@ -182,22 +221,23 @@ export class Traffic {
       // Keep a gap to anything ahead in the same lane, including the player.
       const fx = Math.sin(car.yaw);
       const fz = Math.cos(car.yaw);
-      const ahead = (ox, oz, r) => {
+      // The gap is bumper to bumper, so long buses keep their distance too.
+      const ahead = (ox, oz, r, length) => {
         const rx = ox - car.x;
         const rz = oz - car.z;
         const along = rx * fx + rz * fz;
         const side = Math.abs(rx * fz - rz * fx);
-        return along > 0 && along < 28 && side < r ? along : Infinity;
+        return along > 0 && along < 36 && side < r ? along - (car.type.length + length) / 2 : Infinity;
       };
       let gap = Infinity;
       // Only queue behind cars going the same way (or parked in the lane).
       for (const o of this.cars) {
         if (o === car) continue;
         if (o.moving && Math.sin(o.yaw) * fx + Math.cos(o.yaw) * fz < 0.5) continue;
-        gap = Math.min(gap, ahead(o.x, o.z, 1.5));
+        gap = Math.min(gap, ahead(o.x, o.z, 1.5, o.type.length));
       }
-      if (player) gap = Math.min(gap, ahead(player.x, player.z, 1.8));
-      if (gap < 28) target = Math.min(target, Math.max(0, (gap - 7) * 0.8));
+      if (player) gap = Math.min(gap, ahead(player.x, player.z, 1.8, player.length ?? 4.6));
+      if (gap < 24) target = Math.min(target, Math.max(0, (gap - 2.4) * 0.8));
       // Keep to the speed limit, and wait at red lights.
       target = Math.min(target, speedLimitAt(car.x, car.z) / 3.6);
       const stop = this.lights ? this.lights.stopDistance(car) : Infinity;
@@ -218,24 +258,27 @@ export class Traffic {
     // Draw the nearby ones.
     const cx = camera.globalPosition.x;
     const cz = camera.globalPosition.z;
-    let n = 0;
     const m = Matrix.Identity();
     const q = new Quaternion();
     const pos = new Vector3();
     const one = Vector3.One();
+    for (const t of this.types) t.count = 0;
     for (const car of this.cars) {
-      if (n >= this.maxInstances) break;
+      const t = car.type;
+      if (t.count >= this.maxInstances) continue;
       if (Math.abs(car.x - cx) > DRAW_RANGE || Math.abs(car.z - cz) > DRAW_RANGE) continue;
       Quaternion.RotationYawPitchRollToRef(car.yaw, car.pitch, 0, q);
       pos.set(car.x, car.y, car.z);
       Matrix.ComposeToRef(one, q, pos, m);
-      m.copyToArray(this.matrices, n * 16);
-      this.colours.set([car.colour[0], car.colour[1], car.colour[2], 1], n * 4);
-      n++;
+      m.copyToArray(t.matrices, t.count * 16);
+      if (t.colours) t.colours.set([car.colour[0], car.colour[1], car.colour[2], 1], t.count * 4);
+      t.count++;
     }
-    this.mesh.thinInstanceCount = n;
-    this.mesh.thinInstanceBufferUpdated("matrix");
-    this.mesh.thinInstanceBufferUpdated("color");
+    for (const t of this.types) {
+      t.mesh.thinInstanceCount = t.count;
+      t.mesh.thinInstanceBufferUpdated("matrix");
+      if (t.colours) t.mesh.thinInstanceBufferUpdated("color");
+    }
   }
 
   _handleEnds(car) {
@@ -275,23 +318,35 @@ export class Traffic {
     }
   }
 
-  // Circles other things should bump into: two per car.
+  // Circles other things should bump into: a row of them along each vehicle.
   colliders() {
     const out = [];
     for (const c of this.cars) {
       const fx = Math.sin(c.yaw);
       const fz = Math.cos(c.yaw);
-      out.push({ x: c.x + fx * 1.0, z: c.z + fz * 1.0, r: CAR_RADIUS, car: c });
-      out.push({ x: c.x - fx * 1.0, z: c.z - fz * 1.0, r: CAR_RADIUS, car: c });
+      const { length, halfWidth } = c.type;
+      const r = halfWidth * 0.95;
+      const reach = Math.max(0, length / 2 - r);
+      const n = Math.max(2, Math.ceil((2 * reach) / (r * 1.4)) + 1);
+      for (let i = 0; i < n; i++) {
+        const off = -reach + (2 * reach * i) / (n - 1);
+        out.push({ x: c.x + fx * off, z: c.z + fz * off, r, car: c });
+      }
     }
     return out;
   }
 
+  // The vehicle nearest (x, z), measured to its side, so you can get into
+  // a bus from its door rather than only from its middle.
   nearest(x, z, within) {
     let best = null;
     let bestD = within;
     for (const c of this.cars) {
-      const d = Math.hypot(c.x - x, c.z - z);
+      const fx = Math.sin(c.yaw);
+      const fz = Math.cos(c.yaw);
+      const reach = Math.max(0, c.type.length / 2 - 1.5);
+      const along = Math.max(-reach, Math.min(reach, (x - c.x) * fx + (z - c.z) * fz));
+      const d = Math.hypot(c.x + fx * along - x, c.z + fz * along - z) - (c.type.halfWidth - 1);
       if (d < bestD) {
         bestD = d;
         best = c;

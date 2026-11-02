@@ -70,6 +70,9 @@ function fixMaterials(scene, materials, plate = true) {
       m.emissiveTexture = null;
       m.emissiveColor = Color3.Black();
     }
+    // The paint has a fine metal-flake texture. On an iPad screen it sparkles
+    // and shimmers under street lights, so keep only a hint of it.
+    if (/^Paint/.test(m.name) && m.bumpTexture) m.bumpTexture.level = 0.08;
     if (m.name === "Glass") {
       m.subSurface.isRefractionEnabled = false;
       m.albedoColor = new Color3(0.02, 0.025, 0.03);
@@ -261,3 +264,158 @@ export function setPaint(car, color) {
 }
 
 export const tmpV = new Vector3();
+
+// --- The downloaded vehicles (tools/prepare-models.mjs) ----------------------------
+// Each one stands on the origin facing +Z: a body in a few parts (paint,
+// glass, lights...) and separate wheels named wheel_N.
+
+const vehicleOptions = {
+  pluginOptions: { gltf: { createInstances: false, extensionOptions: { KHR_materials_transmission: { enabled: false } } } },
+};
+
+// Headlights and tail lights are both drawn on each model's "optics" picture.
+// Glowing with that same picture lights each lamp in its own colour at night.
+function prepareVehicleMaterials(materials) {
+  const lights = [];
+  for (const m of materials) {
+    if (!(m instanceof PBRMaterial)) continue;
+    if (/optic/i.test(m.name)) {
+      m.emissiveTexture = m.albedoTexture;
+      m.emissiveColor = Color3.Black();
+      lights.push(m);
+    }
+    if (/glass/i.test(m.name)) m.backFaceCulling = false;
+  }
+  return lights;
+}
+
+const boundsOf = (meshes) => {
+  const min = new Vector3(Infinity, Infinity, Infinity);
+  const max = new Vector3(-Infinity, -Infinity, -Infinity);
+  for (const m of meshes) {
+    m.computeWorldMatrix(true);
+    const bb = m.getBoundingInfo().boundingBox;
+    min.minimizeInPlace(bb.minimumWorld);
+    max.maximizeInPlace(bb.maximumWorld);
+  }
+  return { min, max };
+};
+
+// The driveable version, in the same shape loadCar gives (so everything that
+// works with the concept car works with these).
+export async function loadVehicle(scene, id, onProgress) {
+  const result = await ImportMeshAsync(`assets/vehicles/${id}.glb`, scene, {
+    ...vehicleOptions,
+    onProgress: (e) => e.lengthComputable && onProgress?.(e.loaded / e.total),
+  });
+  const gltfRoot = result.meshes[0];
+  const root = new TransformNode("car", scene);
+  root.rotationQuaternion = null;
+  const body = new TransformNode("carBody", scene);
+  body.parent = root;
+  gltfRoot.parent = body;
+  const parts = result.meshes.filter((m) => m.getTotalVertices() > 0);
+  const materials = new Set(parts.map((m) => m.material).filter(Boolean));
+  const head = prepareVehicleMaterials(materials);
+  // Lighter windows on the one you drive, so the view from the driver's seat isn't dark.
+  for (const m of materials) if (/glass/i.test(m.name)) m.alpha = Math.min(m.alpha, 0.45);
+
+  // Wheels: one steer node at each wheel's middle, a spin node under it.
+  const groups = new Map();
+  for (const m of parts) {
+    const k = /^wheel_(\d+)/.exec(m.name)?.[1];
+    if (k === undefined) continue;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(m);
+  }
+  const wheels = [];
+  for (const list of groups.values()) {
+    const { min, max } = boundsOf(list);
+    const c = min.add(max).scale(0.5);
+    const steer = new TransformNode("wheelSteer", scene);
+    steer.parent = root;
+    steer.position = c.clone();
+    const spin = new TransformNode("wheelSpin", scene);
+    spin.parent = steer;
+    for (const m of list) m.setParent(spin);
+    wheels.push({ front: c.z > 0, left: c.x < 0, steer, spin, rest: c.clone(), offset: 0, radius: (max.y - min.y) / 2 });
+  }
+  // Front left, front right, rear left, rear right first (they follow the ground
+  // under those corners); any extra rear wheels after.
+  wheels.sort((a, b) => b.front - a.front || b.left - a.left || b.rest.z - a.rest.z);
+  for (const w of wheels) w.groundIndex = (w.front ? 0 : 2) + (w.left ? 0 : 1);
+
+  const meshes = [];
+  const shadowMeshes = [];
+  parts.forEach((m, i) => {
+    if (!/^wheel_/.test(m.name)) {
+      const mat = m.material?.name ?? "";
+      // Named so crash dents work on them (see car/damage.js).
+      m.name = /glass/i.test(mat) ? `car_Glass_${i}` : /optic/i.test(mat) ? `car_Headlight_${i}` : `car_Panel_${i}`;
+      m.setParent(body);
+    }
+    m.isPickable = false;
+    m.receiveShadows = true;
+    meshes.push(m);
+    if (!/glass/i.test(m.material?.name ?? "")) shadowMeshes.push(m);
+  });
+  gltfRoot.dispose(true, false);
+
+  const { min, max } = boundsOf(meshes);
+  const fronts = wheels.filter((w) => w.front);
+  const rears = wheels.filter((w) => !w.front);
+  const avg = (list, f) => list.reduce((s, w) => s + f(w), 0) / Math.max(1, list.length);
+  const length = max.z - min.z;
+  const width = max.x - min.x;
+  const height = max.y;
+  const geometry = {
+    frontZ: fronts.length ? avg(fronts, (w) => w.rest.z) : max.z * 0.62,
+    rearZ: rears.length ? avg(rears, (w) => w.rest.z) : min.z * 0.62,
+    halfTrack: fronts.length ? avg(fronts, (w) => Math.abs(w.rest.x)) : width * 0.42,
+    front: max.z,
+    rear: min.z,
+    halfWidth: width / 2,
+    length,
+    height,
+  };
+  // Where the driver's eyes are: big vehicles sit you right at the front.
+  const big = length > 6.2;
+  const eye = new Vector3(0, height * (big ? 0.78 : 0.86), big ? max.z - 1.1 : geometry.frontZ - 1.2);
+  const views = {
+    bonnet: big ? new Vector3(0, height * 0.55, max.z + 0.25) : new Vector3(0, height * 0.8, geometry.frontZ - 0.1),
+    bumper: new Vector3(0, Math.min(0.6, height * 0.3), max.z + 0.15),
+  };
+  return {
+    id,
+    root,
+    body,
+    wheels,
+    meshes,
+    shadowMeshes,
+    geometry,
+    materials: [...materials],
+    steeringPivot: null,
+    steeringAxis: null,
+    eye,
+    views,
+    lights: { head, tail: [] },
+    wheelRadius: wheels.length ? avg(wheels, (w) => w.radius) : WHEEL_RADIUS,
+    chase: { dist: Math.max(1, length / 4.6), height: Math.max(1, height / 1.4) },
+  };
+}
+
+// The traffic version: the whole vehicle as one mesh (one piece per material),
+// ready to be drawn many times at once. Also gives its size.
+export async function loadVehicleLod(scene, id) {
+  const result = await ImportMeshAsync(`assets/vehicles/${id}.glb`, scene, vehicleOptions);
+  const gltfRoot = result.meshes[0];
+  const parts = result.meshes.filter((m) => m.getTotalVertices() > 0);
+  const materials = new Set(parts.map((m) => m.material).filter(Boolean));
+  const lights = prepareVehicleMaterials(materials);
+  const { min, max } = boundsOf(parts);
+  const mesh = mergeParts(parts, true);
+  mesh.name = `traffic_${id}`;
+  gltfRoot.dispose();
+  mesh.isPickable = false;
+  return { mesh, lights, length: max.z - min.z, halfWidth: (max.x - min.x) / 2 };
+}

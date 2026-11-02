@@ -9,8 +9,8 @@ export const CAMERA_MODES = [
   { name: "Chase", kind: "chase", dist: 6.4, height: 2.1, look: 1.1, fov: [0.88, 1.02] },
   { name: "Far chase", kind: "chase", dist: 9.5, height: 3.2, look: 1.0, fov: [0.84, 0.96] },
   { name: "Driver", kind: "attached", eye: "driver", fov: [1.08, 1.18], near: 0.03 },
-  { name: "Bonnet", kind: "attached", pos: [0, 1.04, 1.45], fov: [0.98, 1.1] },
-  { name: "Bumper", kind: "attached", pos: [0, 0.55, 2.55], fov: [0.98, 1.12] },
+  { name: "Bonnet", kind: "attached", pos: [0, 1.04, 1.45], view: "bonnet", fov: [0.98, 1.1] },
+  { name: "Bumper", kind: "attached", pos: [0, 0.55, 2.55], view: "bumper", fov: [0.98, 1.12] },
   { name: "TV camera", kind: "tv" },
 ];
 
@@ -97,7 +97,9 @@ export class ChaseCamera {
     const body = this.car.body;
     body.computeWorldMatrix(true);
     const wm = body.getWorldMatrix();
-    const local = m.eye === "driver" ? this.car.eye : tmp.set(m.pos[0], m.pos[1], m.pos[2]);
+    // (Each downloaded vehicle has its own bonnet and bumper spots.)
+    const own = m.view && this.car.views?.[m.view];
+    const local = m.eye === "driver" ? this.car.eye : own ? tmp.copyFrom(own) : tmp.set(m.pos[0], m.pos[1], m.pos[2]);
     Vector3.TransformCoordinatesToRef(local, wm, this.camera.position);
     tmpLook.set(local.x, local.y - 0.35, local.z + 10);
     Vector3.TransformCoordinatesToRef(tmpLook, wm, this.target);
@@ -126,8 +128,10 @@ export class ChaseCamera {
     const ux = this.dirX / l;
     const uz = this.dirZ / l;
 
-    const dist = m.dist + clamp(speed / 50, 0, 1) * 1.2;
-    const want = tmp.set(v.x - ux * dist, v.y + m.height, v.z - uz * dist);
+    // Further back and higher up for long and tall vehicles.
+    const size = this.car.chase ?? { dist: 1, height: 1 };
+    const dist = (m.dist + clamp(speed / 50, 0, 1) * 1.2) * size.dist;
+    const want = tmp.set(v.x - ux * dist, v.y + m.height * size.height, v.z - uz * dist);
     const ground = Math.max(this.world.getHeight(want.x, want.z), SEA_LEVEL) + 0.7;
     if (want.y < ground) want.y = ground;
     if (this._first) this.pos.copyFrom(want);
@@ -137,7 +141,7 @@ export class ChaseCamera {
       this.pos.z = lerp(this.pos.z, want.z, kp);
       this.pos.y = lerp(this.pos.y, want.y, 1 - Math.exp(-dt * 5));
     }
-    this.target.set(v.x + ux * 2.5, v.y + m.look, v.z + uz * 2.5);
+    this.target.set(v.x + ux * 2.5 * size.dist, v.y + m.look * size.height, v.z + uz * 2.5 * size.dist);
 
     // Bumps and crashes shake the view a touch.
     this.shake = Math.max(this.shake * Math.exp(-dt * 6), v.impact);

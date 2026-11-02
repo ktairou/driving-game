@@ -8,18 +8,21 @@ import { buildRoad } from "./world/road.js";
 import { buildTown } from "./world/town.js";
 import { buildLandmarks } from "./world/landmarks.js";
 import { buildNature } from "./world/nature.js";
+import { buildParks } from "./world/parks.js";
+import { buildFlags } from "./world/flags.js";
 import { SPAWN, LANE_OFFSET } from "./world/layout.js";
-import { loadCar, loadCarLod } from "./car/carModel.js";
+import { loadCar, loadCarLod, loadVehicle, loadVehicleLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
 import { CarDamage } from "./car/damage.js";
 import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
 import { planStations, buildStations, stationApproach } from "./world/stations.js";
+import { LandmarkModels } from "./world/landmarkModels.js";
 import { Fuel, Refuel, pumpSpotAt, FUEL_FLOOR } from "./fuel.js";
 import { ChaseCamera } from "./camera.js";
 import { Input } from "./input.js";
 import { Weather, WEATHERS } from "./weather.js";
 import { GameAudio } from "./audio.js";
-import { Traffic } from "./traffic.js";
+import { Traffic, TRAFFIC_MIX } from "./traffic.js";
 import { People } from "./people.js";
 import { Navigator, AutoDriver } from "./navigation.js";
 import { renderMapImage, MiniMap, BigMap, PLACES, setFuelStations } from "./map.js";
@@ -101,14 +104,28 @@ async function start() {
   const town = await buildTown(scene, world, colliders);
   const landmarks = buildLandmarks(scene, world, colliders);
   const stationParts = buildStations(scene, world, colliders, stations);
-  town.lampSpots.push(...stationParts.lampSpots);
+  const landmarkModels = new LandmarkModels(scene, world, colliders);
+  const parks = buildParks(scene, world, colliders, town.parks, preset, town.lampGlow);
+  town.lampSpots.push(...stationParts.lampSpots, ...parks.lampSpots);
+  const flags = buildFlags(scene, world, colliders, { roofs: town.roofs, parks: town.parks, stations });
+  // (Mixed in near the front, so some people stroll in the parks even when there are few people.)
+  parks.walkSpots.forEach((sp, i) => town.pavementSpots.splice(Math.min(town.pavementSpots.length, i * 3), 0, sp));
   setProgress(0.42, "Planting trees…");
   await nextFrame();
-  const nature = buildNature(scene, world, colliders, preset);
+  const nature = buildNature(scene, world, colliders, preset, parks.trees);
 
   setProgress(0.46, "Bringing the car round…");
-  const car = await loadCar(scene, (p) => setProgress(0.46 + p * 0.34));
+  // The concept car, or one of the downloaded vehicles.
+  const loadEntry = (entry, onProgress) => (entry.model ? loadVehicle(scene, entry.model, onProgress) : loadCar(scene, onProgress));
   let carEntry = GARAGE.find((g) => g.id === settings.car) ?? GARAGE[0];
+  let car;
+  try {
+    car = await loadEntry(carEntry, (p) => setProgress(0.46 + p * 0.2));
+  } catch (err) {
+    console.warn("couldn't load", carEntry.id, err);
+    carEntry = GARAGE[0];
+    car = await loadCar(scene);
+  }
   let paint = carEntry.paint;
   applyPaint(car, paint);
   const vehicle = new Vehicle(car, world, colliders, carEntry.spec);
@@ -119,10 +136,25 @@ async function start() {
   fuel.auto = settings.fuelMode === "auto";
   vehicle.place(SPAWN.x, SPAWN.z, SPAWN.heading);
 
-  setProgress(0.82, "Filling the roads…");
+  setProgress(0.7, "Filling the roads…");
   const lod = await loadCarLod(scene);
+  // Fewer kinds of vehicle on the Low setting (each kind costs graphics memory).
+  const mix = TRAFFIC_MIX.filter((t) => level !== "low" || !t.more);
+  let loadedKinds = 0;
+  const kinds = await Promise.all(
+    mix.map(async (t) => {
+      try {
+        const v = await loadVehicleLod(scene, t.id);
+        setProgress(0.7 + (++loadedKinds / mix.length) * 0.15, "Filling the roads…");
+        return { ...t, ...v };
+      } catch (err) {
+        console.warn("couldn't load traffic", t.id, err);
+        return null;
+      }
+    }),
+  );
   const lights = new TrafficLights(scene, world, colliders);
-  const traffic = new Traffic(scene, world, lod, preset);
+  const traffic = new Traffic(scene, world, [{ id: "gt", mesh: lod, length: 4.6, halfWidth: 1.0, weight: 1, parked: true, coloured: true }, ...kinds.filter(Boolean)], preset);
   traffic.lights = lights;
   const people = new People(scene, world, town.pavementSpots, preset, false);
 
@@ -132,7 +164,11 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, lod, ...lights.casters, ...stationParts.casters]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters]) csm.addShadowCaster(m, false);
+  // Real landmark models load as you get near them.
+  landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
+  landmarkModels.update(SPAWN.x, SPAWN.z);
+
 
   // ---------- Camera effects ----------
   const pipeline = new DefaultRenderingPipeline("post", true, scene, [chase.camera]);
@@ -171,6 +207,41 @@ async function start() {
   weather.set(settings.weather);
   const daynight = new DayNight(scene, sky, pipeline, weather, settings.hour);
   const nightLights = new NightLights(scene, { world, town, car, lod });
+  for (const t of traffic.types) if (t.lights) nightLights.addTrafficLights(t.lights);
+
+  // Swap the vehicle you're driving for another one, where you are now.
+  const swapCar = async (entry, paintOverride = null) => {
+    const next = await loadEntry(entry);
+    const old = car;
+    car = next;
+    carEntry = entry;
+    paint = paintOverride ?? entry.paint;
+    applyPaint(car, paint);
+    vehicle.setCar(car, entry.spec);
+    vehicle.sync();
+    damage.setCar(car);
+    nightLights.setCar(car);
+    chase.car = car;
+    chase._first = true;
+    for (const m of old.shadowMeshes) csm.removeShadowCaster(m, false);
+    for (const m of car.shadowMeshes) csm.addShadowCaster(m, false);
+    old.root.dispose(false, true);
+    fuel.electric = !!entry.electric;
+  };
+  // A kind of vehicle the traffic can draw (loading it if it isn't on the roads yet).
+  const trafficKind = async (id) => {
+    if (traffic.type(id)) return id;
+    try {
+      const v = await loadVehicleLod(scene, id);
+      traffic.addType({ id, ...v });
+      nightLights.addTrafficLights(v.lights);
+      csm.addShadowCaster(v.mesh, false);
+      return id;
+    } catch {
+      return "gt";
+    }
+  };
+  let swapping = false;
   const audio = new GameAudio();
   audio.enabled = settings.sound;
   document.addEventListener("pointerdown", () => audio.start(), true);
@@ -181,7 +252,7 @@ async function start() {
   const autodriver = new AutoDriver(world, navigator);
   autodriver.lights = lights;
   autodriver.colliders = colliders;
-  const mapImage = renderMapImage(world);
+  const mapImage = renderMapImage(world, town.parks);
   const minimap = new MiniMap($("minimap"), mapImage);
   let guide = null; // { route, name, progress }
   let picked = null; // destination chosen on the big map
@@ -293,13 +364,15 @@ async function start() {
     });
   });
   $("btn-fuel-skip").addEventListener("click", () => refuel.skip());
-  $("btn-action").addEventListener("click", () => {
+  $("btn-action").addEventListener("click", async () => {
+    if (swapping) return;
     if (mode === "drive") {
       // Step out on the driver's side.
       const lx = -Math.cos(vehicle.heading);
       const lz = Math.sin(vehicle.heading);
-      people.player.x = vehicle.x + lx * 1.8;
-      people.player.z = vehicle.z + lz * 1.8;
+      const out = (car.geometry.halfWidth ?? 1) + 0.8;
+      people.player.x = vehicle.x + lx * out;
+      people.player.z = vehicle.z + lz * out;
       people.player.y = world.getHeight(people.player.x, people.player.z);
       people.player.heading = vehicle.heading;
       chase.footYaw = vehicle.heading;
@@ -310,18 +383,22 @@ async function start() {
     }
     if (!nearbyCar) return;
     if (nearbyCar !== "own") {
-      // Swap: your old car is left parked here, you take this one.
+      // Swap: your old vehicle is left parked here, you take this one.
       const t = nearbyCar;
-      traffic.remove(t);
-      traffic.addParked(vehicle.x, vehicle.z, vehicle.heading, paint.colour).abandoned = true;
-      vehicle.place(t.x, t.z, t.yaw);
-      damage.repair();
-      paint = { colour: t.colour, metallic: 0.75, roughness: 0.22 };
-      applyPaint(car, paint);
-      // Someone else's car: some are electric, and the tank is part full.
-      fuel.electric = Math.random() < 0.3;
+      const left = { x: vehicle.x, z: vehicle.z, heading: vehicle.heading, colour: paint?.colour ?? [0.6, 0.6, 0.6], kind: carEntry.model ?? "gt" };
+      const entry = GARAGE.find((g) => g.model && g.model === t.type.id) ?? GARAGE[0];
+      swapping = true;
+      try {
+        await swapCar(entry, entry.model ? null : { colour: t.colour, metallic: 0.75, roughness: 0.22 });
+        traffic.remove(t);
+        vehicle.place(t.x, t.z, t.yaw);
+        traffic.addParked(left.x, left.z, left.heading, left.colour, await trafficKind(left.kind)).abandoned = true;
+      } finally {
+        swapping = false;
+      }
+      // Someone else's vehicle: the tank (or battery) is part full.
       fuel.level = 0.35 + Math.random() * 0.6;
-      toast(fuel.electric ? "New car (electric) — enjoy!" : "New car — enjoy!");
+      toast(`${entry.model ? entry.name : "New car"}${fuel.electric ? " (electric)" : ""} — enjoy!`);
     }
     setMode("drive");
   });
@@ -422,27 +499,39 @@ async function start() {
   const renderGarage = () => {
     const list = $("garage-list");
     list.innerHTML = "";
+    let lastKind = null;
     for (const g of GARAGE) {
+      if (g.kind !== lastKind) {
+        lastKind = g.kind;
+        const head = document.createElement("div");
+        head.className = "garage-group";
+        head.textContent = g.kind === "service" ? "Service vehicles" : "Cars";
+        list.appendChild(head);
+      }
       const s = stats(g);
       const card = document.createElement("button");
       card.className = "car-card" + (g === carEntry ? " on" : "");
-      const [r, gg, b] = g.paint.colour.map((v) => Math.round(Math.pow(v, 1 / 2.2) * 255));
       card.innerHTML = `
-        <div class="swatch" style="background: linear-gradient(135deg, rgb(${r},${gg},${b}), rgb(${Math.round(r * 0.55)},${Math.round(gg * 0.55)},${Math.round(b * 0.55)}))"></div>
+        <img class="thumb" src="assets/vehicles/thumbs/${g.model ?? "concept"}.webp" alt="" loading="lazy">
         <div class="name">${g.name}</div>
         <div class="trim">${g.trim} · ${g.electric ? "Electric" : "Petrol"}</div>
         ${["speed", "acceleration", "grip"].map((k) => `<div class="stat">${k[0].toUpperCase() + k.slice(1)}<span class="bar"><i style="width:${Math.round(s[k] * 100)}%"></i></span></div>`).join("")}`;
-      card.addEventListener("click", () => {
-        carEntry = g;
-        paint = g.paint;
-        applyPaint(car, paint);
-        vehicle.setCar(car, g.spec);
-        damage.repair();
-        fuel.electric = !!g.electric;
-        fuel.level = 1;
-        settings.car = g.id;
-        saveSettings(settings);
-        renderGarage();
+      card.addEventListener("click", async () => {
+        if (swapping || g === carEntry) return;
+        swapping = true;
+        card.classList.add("loading");
+        try {
+          await swapCar(g);
+          fuel.level = 1;
+          settings.car = g.id;
+          saveSettings(settings);
+        } catch (err) {
+          console.warn("couldn't load", g.id, err);
+          toast("Couldn't load that one — try again");
+        } finally {
+          swapping = false;
+          renderGarage();
+        }
       });
       list.appendChild(card);
     }
@@ -561,6 +650,7 @@ async function start() {
   let splashing = false;
   let lastImpact = 0;
   let saveTimer = 20;
+  let landmarkTimer = 0;
   vehicle.onBump = (o, speed) => {
     if (o.car && o.car.moving && speed > 1) o.car.stopTimer = 3;
   };
@@ -587,12 +677,14 @@ async function start() {
     } else {
       vehicle.dynamic = dynamicCars;
       vehicle.update(dt, IDLE);
-      const own = { x: vehicle.x, z: vehicle.z, r: 2.2 };
-      people.movePlayer(dt, input.stick.x, input.stick.y, chase.yaw, colliders, [...dynamicCars, own]);
+      const fx = Math.sin(vehicle.heading);
+      const fz = Math.cos(vehicle.heading);
+      const own = vehicle.hitOffsets.map((o) => ({ x: vehicle.x + fx * o, z: vehicle.z + fz * o, r: vehicle.hitRadius + 0.2 }));
+      people.movePlayer(dt, input.stick.x, input.stick.y, chase.yaw, colliders, [...dynamicCars, ...own]);
       // Which car could you get into?
       const p = people.player;
       const t = traffic.nearest(p.x, p.z, 3.6);
-      nearbyCar = Math.hypot(vehicle.x - p.x, vehicle.z - p.z) < 3.8 ? "own" : t;
+      nearbyCar = own.some((c) => Math.hypot(c.x - p.x, c.z - p.z) < c.r + 1.8) ? "own" : t;
     }
     const me = playerPos();
     traffic.update(dt, mode === "foot" ? people.player : vehicle, chase.camera);
@@ -602,10 +694,16 @@ async function start() {
     people.draw();
     weather.update(dt, chase.camera, vehicle);
     lights.update(dt);
+    flags.update(dt);
     if (mode === "drive" && lights.ranRed(vehicle.x, vehicle.z, vehicle.vx, vehicle.vz)) toast("You went through a red light!");
     daynight.update(dt);
     damage.update(dt, vehicle, daynight.night);
     nightLights.update(daynight.night, mode === "drive" && vehicle.forwardSpeed > 0.5 && (autodriver.active ? false : input.brake > 0), me, traffic.cars);
+    landmarkTimer -= dt;
+    if (landmarkTimer <= 0) {
+      landmarkTimer = 1;
+      landmarkModels.update(me.x, me.z);
+    }
     // Remember the time of day now and then, so it carries on next time.
     saveTimer -= dt;
     if (saveTimer <= 0) {
@@ -765,7 +863,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, setMode, get mode() { return mode; }, pickDestination };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination };
   }
 }
 
