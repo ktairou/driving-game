@@ -8,11 +8,20 @@ export const PRESETS = {
 export const LEVELS = ["low", "medium", "high"];
 
 const KEY = "drivingGame.settings.v1";
-const DEFAULTS = { graphics: "auto", units: "mph", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real" };
+const DEFAULTS = { graphics: "auto", units: "kmh", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real" };
 
 export function loadSettings() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+    const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+    const settings = { ...DEFAULTS, ...saved };
+    // Speeds and limits show in km/h now (the signs read 60 in towns, 120
+    // outside). Everyone is switched over once; after that the choice in
+    // Settings sticks.
+    if (!saved.kmhSwitched) {
+      settings.units = "kmh";
+      settings.kmhSwitched = true;
+    }
+    return settings;
   } catch {
     return { ...DEFAULTS };
   }
