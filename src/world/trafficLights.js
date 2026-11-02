@@ -5,7 +5,7 @@ import { ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./layout.js";
 
 // Speed limits (km/h): 60 where there are houses, 120 everywhere else.
 export function speedLimitAt(x, z) {
-  return inTown(x, z, 20) ? 60 : 120;
+  return inTown(x, z, 20) ? 70 : 140;
 }
 
 // Traffic lights at every crossroads and T-junction in a town. Each one has

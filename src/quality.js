@@ -14,7 +14,7 @@ export function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
     const settings = { ...DEFAULTS, ...saved };
-    // Speeds and limits show in km/h now (the signs read 60 in towns, 120
+    // Speeds and limits show in km/h now (the signs read 70 in towns, 140
     // outside). Everyone is switched over once; after that the choice in
     // Settings sticks.
     if (!saved.kmhSwitched) {
