@@ -383,7 +383,15 @@ async function landmarks() {
       if (tris(doc) <= MAX_TRIS * 1.1) break;
       await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: Math.min(1, MAX_TRIS / tris(doc)), error }));
     }
-    await doc.transform(dedup(), prune(), center({ pivot: "below" }), textureCompress({ encoder: sharp, targetFormat: "webp", resize: [2048, 2048] }), prune());
+    // Only the colour picture, and not too big: landmarks are mostly seen from
+    // a distance, and an iPad closes the page if graphics memory runs out.
+    for (const mat of doc.getRoot().listMaterials()) {
+      if (mat.getMetallicRoughnessTexture()) mat.setMetallicFactor(0).setRoughnessFactor(0.85);
+      mat.setNormalTexture(null).setOcclusionTexture(null).setMetallicRoughnessTexture(null).setEmissiveTexture(null);
+    }
+    await doc.transform(prune());
+    const maxTexture = 1024;
+    await doc.transform(dedup(), prune(), center({ pivot: "below" }), textureCompress({ encoder: sharp, targetFormat: "webp", resize: [maxTexture, maxTexture] }), prune());
     const b = getBounds(doc.getRoot().listScenes()[0]);
     // Smaller numbers for positions and normals (read directly by the game engine).
     await doc.transform(quantize());

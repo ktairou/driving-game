@@ -3,9 +3,11 @@ import { ISLANDS, SEA_LEVEL } from "./layout.js";
 
 // The real landmark models (downloaded from Sketchfab, Creative Commons
 // Attribution; made game-ready by tools/prepare-models.mjs). Each one loads
-// the first time you come within reach of it, so the game starts quickly and
-// the iPad only fetches what you actually go and see.
+// when you come within reach of it, so the game starts quickly and the iPad
+// only fetches what you actually go and see, and is put away again once you
+// are far off, so graphics memory doesn't keep filling up.
 const LOAD_DIST = 1700;
+const UNLOAD_DIST = 2400;
 
 export class LandmarkModels {
   constructor(scene, world, colliders) {
@@ -17,10 +19,19 @@ export class LandmarkModels {
     for (const lm of this.items) if (!lm.sea) colliders.addBox(lm.x, lm.z, lm.base * 0.4, lm.base * 0.4, lm.yaw ?? 0);
   }
 
-  // Starts loading any landmark you've come near. Call now and then with where you are.
+  // Starts loading any landmark you've come near, and puts away ones you're
+  // far from. Call now and then with where you are.
   update(x, z) {
     for (const lm of this.items) {
-      if (lm.state || Math.hypot(lm.x - x, lm.z - z) > LOAD_DIST) continue;
+      const d = Math.hypot(lm.x - x, lm.z - z);
+      if (lm.state === "ready" && d > UNLOAD_DIST) {
+        lm.holder.dispose(false, true);
+        lm.holder = null;
+        lm.meshes = null;
+        lm.state = null;
+        continue;
+      }
+      if (lm.state || d > LOAD_DIST) continue;
       lm.state = "loading";
       this._load(lm).catch((err) => {
         console.warn("landmark failed to load", lm.model, err);
@@ -72,6 +83,7 @@ export class LandmarkModels {
       m.freezeWorldMatrix();
     }
     lm.state = "ready";
+    lm.holder = holder;
     lm.meshes = meshes;
     this.onLoaded?.(meshes, lm);
   }

@@ -138,8 +138,9 @@ async function start() {
 
   setProgress(0.7, "Filling the roads…");
   const lod = await loadCarLod(scene);
-  // Fewer kinds of vehicle on the Low setting (each kind costs graphics memory).
-  const mix = TRAFFIC_MIX.filter((t) => level !== "low" || !t.more);
+  // All kinds of vehicle only on the High setting; each kind costs graphics
+  // memory, and an iPad (Medium on Auto) closes the page if that runs out.
+  const mix = TRAFFIC_MIX.filter((t) => level === "high" || !t.more);
   let loadedKinds = 0;
   const kinds = await Promise.all(
     mix.map(async (t) => {

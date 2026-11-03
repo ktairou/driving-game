@@ -12,7 +12,7 @@ export const CAR_COLOURS = [
 const DRAW_RANGE = 480; // cars further than this from the camera aren't drawn
 
 // Which vehicles drive about, and how common each one is. "more" ones only
-// on the higher graphics settings (each kind costs graphics memory). Parked
+// on the High graphics setting (each kind costs graphics memory). Parked
 // ones are only the everyday kinds.
 export const TRAFFIC_MIX = [
   { id: "sedan", weight: 3, parked: true },
