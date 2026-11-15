@@ -8,12 +8,15 @@ import { buildRoad } from "./world/road.js";
 import { buildTown } from "./world/town.js";
 import { buildLandmarks } from "./world/landmarks.js";
 import { buildNature } from "./world/nature.js";
+import { buildGroundCover } from "./world/groundCover.js";
+import { updateWind } from "./world/wind.js";
 import { buildParks } from "./world/parks.js";
 import { buildFlags, flagPicture } from "./world/flags.js";
 import { SPAWN, LANE_OFFSET } from "./world/layout.js";
 import { loadCar, loadCarLod, loadVehicle, loadVehicleLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
 import { CarDamage } from "./car/damage.js";
+import { Cabin } from "./car/cabin.js";
 import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
 import { planStations, buildStations, stationApproach } from "./world/stations.js";
 import { LandmarkModels } from "./world/landmarkModels.js";
@@ -131,6 +134,7 @@ async function start() {
   setProgress(0.42, "Planting trees…");
   await nextFrame();
   const nature = buildNature(scene, world, colliders, preset, parks.trees);
+  const cover = buildGroundCover(scene, world, colliders, preset, nature.trunk);
 
   setProgress(0.46, "Bringing the car round…");
   // The concept car, or one of the downloaded vehicles.
@@ -183,7 +187,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters]) csm.addShadowCaster(m, false);
   // Real landmark models load as you get near them.
   landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
   landmarkModels.update(SPAWN.x, SPAWN.z);
@@ -222,7 +226,7 @@ async function start() {
   const findMats = (re) => scene.materials.filter((m) => re.test(m.name));
   const asphalt = findMats(/^(asphalt|asphaltTop|paintWhite|paintYellow|pavers)$/);
   for (const m of asphalt) m._baseTint = m.albedoColor.clone();
-  const weather = new Weather(scene, sky, world, preset, { asphalt, leaves: findMats(/^leaves/) });
+  const weather = new Weather(scene, sky, world, preset, { asphalt, leaves: findMats(/^(leaves|groundCover|palmFronds)/) });
   weather.set(settings.weather);
   const daynight = new DayNight(scene, sky, pipeline, weather, settings.hour);
   const nightLights = new NightLights(scene, { world, town, car, lod });
@@ -240,6 +244,8 @@ async function start() {
     vehicle.sync();
     damage.setCar(car);
     nightLights.setCar(car);
+    // (Before the old vehicle goes: the cockpit kit hangs off its body.)
+    cabin.setCar(car);
     chase.car = car;
     chase._first = true;
     for (const m of old.shadowMeshes) csm.removeShadowCaster(m, false);
@@ -273,6 +279,9 @@ async function start() {
   autodriver.colliders = colliders;
   const mapImage = renderMapImage(world, town.parks);
   const minimap = new MiniMap($("minimap"), mapImage);
+  // The cockpit seen from the driver's seat (dials, wheel, map screen...).
+  const cabin = new Cabin(scene, { vehicle, fuel, damage, daynight, settings, minimap: minimap.canvas });
+  cabin.setCar(car);
   let guide = null; // { route, name, progress }
   let picked = null; // destination chosen on the big map
 
@@ -684,6 +693,7 @@ async function start() {
     if (i > 0) {
       level = LEVELS[i - 1];
       preset = { ...PRESETS[level], trees: preset.trees, rocks: preset.rocks };
+      cover.setEnabled(level !== "low");
       applyScale();
       applyEffects();
       chase.camera.maxZ = preset.viewDistance;
@@ -773,6 +783,7 @@ async function start() {
     weather.update(dt, chase.camera, vehicle);
     lights.update(dt);
     flags.update(dt);
+    updateWind(dt);
     if (mode === "drive" && lights.ranRed(vehicle.x, vehicle.z, vehicle.vx, vehicle.vz)) toast("You went through a red light!");
     daynight.update(dt);
     damage.update(dt, vehicle, daynight.night);
@@ -852,6 +863,24 @@ async function start() {
     .catch((err) => console.warn("People did not load", err));
   country = world.islandAt(vehicle.x, vehicle.z)?.def.name ?? null;
 
+  // The camera for what you're doing. The cockpit kit shows only while you
+  // drive in the Driver view: not on foot or at the pump, whatever the camera
+  // button last picked.
+  let cockpitHud = false;
+  const moveCamera = (dt) => {
+    if (mode === "drive") chase.update(dt, vehicle);
+    else if (mode === "fuel") refuel.camera(chase.camera);
+    else chase.followPerson(dt, people.player);
+    cabin.setShown(mode === "drive" && chase.inDriverSeat);
+    if (cabin.shown) cabin.update(dt);
+    // With the cockpit's own dials in view, the speed panel and the Get out
+    // button move up out of their way.
+    if (cabin.kitShown !== cockpitHud) {
+      cockpitHud = cabin.kitShown;
+      $("hud").classList.toggle("hud-cockpit", cockpitHud);
+    }
+  };
+
   let fpsTimer = 0;
   let shownSpeed = -1;
   let shownLimit = -1;
@@ -863,9 +892,7 @@ async function start() {
     const paused = anyPanelOpen();
     audio.setPaused(paused);
     if (!paused) tick(dt);
-    if (mode === "drive") chase.update(dt, vehicle);
-    else if (mode === "fuel") refuel.camera(chase.camera);
-    else chase.followPerson(dt, people.player);
+    moveCamera(dt);
 
     const me = playerPos();
     const heading = mode === "drive" ? vehicle.heading : chase.yaw;
@@ -928,9 +955,7 @@ async function start() {
     const step = (frames, dt = 1 / 60) => {
       for (let i = 0; i < frames; i++) {
         tick(dt);
-        if (mode === "drive") chase.update(dt, vehicle);
-        else if (mode === "fuel") refuel.camera(chase.camera);
-        else chase.followPerson(dt, people.player);
+        moveCamera(dt);
       }
       scene.render();
     };
@@ -941,7 +966,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, GARAGE, swapCar, cabin, get car() { return car; } };
   }
 }
 

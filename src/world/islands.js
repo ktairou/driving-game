@@ -1,9 +1,35 @@
 import { createNoise2D, fbm, smoothstep, lerp, clamp } from "../noise.js";
-import { ROAD_HALF_WIDTH } from "./layout.js";
+import { ISLANDS, EXTRA_ROADS, CONNECTORS, DRAG_STRIPS, ROAD_HALF_WIDTH } from "./layout.js";
+import { buildCurve } from "./network.js";
 
 const CELL = 2; // physics height grid spacing in metres
 const ROAD_BLEND = 34; // width of the cut / fill slope beside the road
 const SEA_FLOOR = -24;
+
+// Crags and sea cliffs change the land shape, so they are kept away from
+// everything placed against it. KEEP is how close they may come (metres) to a
+// town, landmark (and the hill it stands on) or drag strip; roads get
+// ROAD_PAD more, because fuel stations and their levelled ground reach that far
+// back from the road and are planned only after the land exists.
+const KEEP = 150;
+const ROAD_PAD = 45;
+const KEEP_CELL = 10; // the distance grid behind that test
+// The grid's distances run slightly long (up to 8.3 % across diagonals, plus
+// a cell or so from sampling it), so changes start a safe margin further
+// out, and fade in over the next FADE metres.
+const KEEP_START = KEEP * 1.083 + 3.5 * KEEP_CELL;
+const FADE = 110;
+
+// Points every 4 m along every road in the layout (shared by all the islands).
+let roadPoints = null;
+function roadSamples() {
+  roadPoints ??= [
+    ...ISLANDS.map((isl) => buildCurve(isl.road, 4, true)),
+    ...EXTRA_ROADS.map((r) => buildCurve(r.points, 4, false)),
+    ...CONNECTORS.map((c) => buildCurve(c.points, 4, false)),
+  ].flat();
+  return roadPoints;
+}
 
 // One country: its natural ground shape, plus a height grid with the roads
 // carved in, used for both drawing and driving.
@@ -17,6 +43,9 @@ export class Island {
     this.minZ = def.cz - def.half;
     this.size = Math.round((2 * def.half) / CELL) + 1;
     this.cell = CELL;
+    this.noiseD = createNoise2D(def.seed + 37);
+    // (Before anything below asks for the natural height.)
+    this._buildKeepOut();
     // Flat ground under landmarks, at whatever height the land is there.
     this.plateaus = def.landmarks.filter((lm) => lm.plateau !== false).map((lm) => ({
       x: lm.x,
@@ -65,6 +94,117 @@ export class Island {
     return this.townBlend(x, z, margin).w;
   }
 
+  // A coarse grid of the distance to the nearest thing the land must not move
+  // under (see KEEP above), from the layout alone: the roads aren't built yet.
+  // Distances are filled in exactly near each thing, then spread outwards
+  // (a two-pass chamfer sweep).
+  _buildKeepOut() {
+    const n = Math.ceil((2 * this.def.half) / KEEP_CELL) + 1;
+    const dist = new Float32Array(n * n).fill(1e6);
+    const { minX, minZ } = this;
+    // Every cell within `reach` of (x, z) gets `f(cellX, cellZ)` if that's nearer.
+    const near = (x, z, reach, f) => {
+      const i0 = Math.max(0, Math.floor((x - reach - minX) / KEEP_CELL));
+      const i1 = Math.min(n - 1, Math.ceil((x + reach - minX) / KEEP_CELL));
+      const j0 = Math.max(0, Math.floor((z - reach - minZ) / KEEP_CELL));
+      const j1 = Math.min(n - 1, Math.ceil((z + reach - minZ) / KEEP_CELL));
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const k = j * n + i;
+          const v = f(minX + i * KEEP_CELL, minZ + j * KEEP_CELL);
+          if (v < dist[k]) dist[k] = v;
+        }
+      }
+    };
+    const point = (px, pz, pad, reach = 3 * KEEP_CELL) => near(px, pz, reach, (x, z) => Math.hypot(x - px, z - pz) - pad);
+    // Roads (every country's: the bridges reach across), padded for fuel stations.
+    for (const [x, z] of roadSamples()) if (this._nearGrid(x, z, 3 * KEEP_CELL)) point(x, z, ROAD_PAD);
+    // Towns (their parks reach a little beyond, but stay well inside the main street's padding).
+    for (const t of this.def.towns) {
+      near(t.cx, t.cz, Math.max(t.hx, t.hz) + 3 * KEEP_CELL, (x, z) => Math.hypot(Math.max(Math.abs(x - t.cx) - t.hx, 0), Math.max(Math.abs(z - t.cz) - t.hz, 0)));
+    }
+    // Landmarks (sea ones included) and the hills some stand on.
+    for (const lm of this.def.landmarks) {
+      const r = (lm.base ?? 30) / 2;
+      point(lm.x, lm.z, r, r + 3 * KEEP_CELL);
+      if (lm.hill) point(lm.x, lm.z + (lm.hill.dz ?? 0), lm.hill.r, lm.hill.r + 3 * KEEP_CELL);
+    }
+    // Drag strips: their whole length, plus half their width.
+    for (const s of DRAG_STRIPS) {
+      for (let u = 0; u <= (s.length ?? 702); u += 4) point(s.x + Math.sin(s.heading) * u, s.z + Math.cos(s.heading) * u, 10);
+    }
+    // Spread outwards: forward then backward over the grid.
+    const D = KEEP_CELL * Math.SQRT2;
+    const relax = (k, k2, w) => {
+      if (dist[k2] + w < dist[k]) dist[k] = dist[k2] + w;
+    };
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const k = j * n + i;
+        if (i > 0) relax(k, k - 1, KEEP_CELL);
+        if (j > 0) {
+          relax(k, k - n, KEEP_CELL);
+          if (i > 0) relax(k, k - n - 1, D);
+          if (i < n - 1) relax(k, k - n + 1, D);
+        }
+      }
+    }
+    for (let j = n - 1; j >= 0; j--) {
+      for (let i = n - 1; i >= 0; i--) {
+        const k = j * n + i;
+        if (i < n - 1) relax(k, k + 1, KEEP_CELL);
+        if (j < n - 1) {
+          relax(k, k + n, KEEP_CELL);
+          if (i < n - 1) relax(k, k + n + 1, D);
+          if (i > 0) relax(k, k + n - 1, D);
+        }
+      }
+    }
+    // Turned into how freely (0..1) the land may be reshaped, and how much of
+    // a sea cliff each spot gets (a slow noise, so a coarse grid is plenty).
+    const free = new Float32Array(n * n);
+    const cliff = new Float32Array(n * n);
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const k = j * n + i;
+        if (dist[k] <= KEEP_START) continue;
+        free[k] = smoothstep(KEEP_START, KEEP_START + FADE, dist[k]);
+        const x = minX + i * KEEP_CELL;
+        const z = minZ + j * KEEP_CELL;
+        cliff[k] = free[k] * smoothstep(0.12, 0.36, fbm(this.noiseD, x / 700 + 3.7, z / 700 - 1.9, 2));
+      }
+    }
+    this.keepOut = { n, free, cliff };
+  }
+
+  _nearGrid(x, z, margin) {
+    return x >= this.minX - margin && z >= this.minZ - margin && x <= this.minX + 2 * this.def.half + margin && z <= this.minZ + 2 * this.def.half + margin;
+  }
+
+  // One of the keep-out grids at (x, z), blended between its cells.
+  _keepAt(grid, x, z) {
+    const n = this.keepOut.n;
+    const fx = clamp((x - this.minX) / KEEP_CELL, 0, n - 1.001);
+    const fz = clamp((z - this.minZ) / KEEP_CELL, 0, n - 1.001);
+    const i = Math.floor(fx);
+    const j = Math.floor(fz);
+    const tx = fx - i;
+    const tz = fz - j;
+    const k = j * n + i;
+    return (grid[k] * (1 - tx) + grid[k + 1] * tx) * (1 - tz) + (grid[k + n] * (1 - tx) + grid[k + n + 1] * tx) * tz;
+  }
+
+  // How freely (0..1) the land may be reshaped here: 0 near anything built.
+  _freedom(x, z) {
+    return this._keepAt(this.keepOut.free, x, z);
+  }
+
+  // Desert dunes: 0 in the hollows, 1 on the crests (terrain.js shades by it too).
+  dune(x, z) {
+    const d = 1 - Math.abs(this.noiseB((x + z * 0.4) / 110, (z - x * 0.2) / 260));
+    return d * d;
+  }
+
   // Land shape before towns, landmarks and roads.
   _natural(x, z) {
     const d = this.def;
@@ -73,20 +213,39 @@ export class Island {
     let land;
     if (d.climate === "desert") {
       // Long sand dunes on a gently rolling plain.
-      const dune = 1 - Math.abs(this.noiseB((x + z * 0.4) / 110, (z - x * 0.2) / 260));
-      land = 7 + fbm(this.noiseA, x / 700, z / 700, 4) * 14 * d.relief + dune * dune * 9;
+      land = 7 + fbm(this.noiseA, x / 700, z / 700, 4) * 14 * d.relief + this.dune(x, z) * 9;
     } else {
       land = 10 + fbm(this.noiseA, x / 650, z / 650, 5) * 42 * d.relief;
       const r = 1 - Math.abs(this.noiseB(x / 380, z / 380));
       land += r * r * 22 * d.relief;
       land += fbm(this.noiseC, x / 120 + 31.7, z / 120 - 11.3, 3) * 5;
     }
+    // How far out towards the sea this is (the coast is at about d.coast).
+    const reach = Math.max(Math.abs(lx), Math.abs(lz)) * 0.55 + Math.hypot(lx, lz) * 0.45 + fbm(this.noiseB, x / 320, z / 320, 3) * 70;
+    const coastal = reach > d.coast - 330 && reach < d.coast + 40;
+    // (Only high ground and the coast get reshaped, so only they need asking.)
+    const free = land > 24 || coastal ? this._freedom(x, z) : 0;
+    // Craggy tops: ridged noise (sharp crests where the noise crosses zero)
+    // on the high ground, away from anything built.
+    if (free > 0 && land > 24) {
+      const r1 = 1 - Math.abs(this.noiseD(x / 150, z / 150));
+      const r2 = 1 - Math.abs(this.noiseD(x / 55 + 17.3, z / 55 - 8.1));
+      land += (r1 * r1 * r1 * 15 + r2 * r2 * 5 - 5) * smoothstep(24, 40, land) * free;
+    }
     // No inland lakes: keep land above the water away from the shore.
     land = Math.max(land, 3.5 + fbm(this.noiseC, x / 90, z / 90, 2) * 1.5);
     // Shoreline: land eases down to a beach, then drops to the sea floor.
-    const reach = Math.max(Math.abs(lx), Math.abs(lz)) * 0.55 + Math.hypot(lx, lz) * 0.45 + fbm(this.noiseB, x / 320, z / 320, 3) * 70;
-    land = lerp(land, 2.5, smoothstep(d.coast - 320, d.coast - 120, reach));
-    return lerp(land, SEA_FLOOR, smoothstep(d.coast - 120, d.coast + 40, reach));
+    let shore = lerp(land, 2.5, smoothstep(d.coast - 320, d.coast - 120, reach));
+    // Low sea cliffs on some stretches of coast: the land stays up almost to
+    // the water, then drops straight in. The beach stays everywhere else.
+    if (free > 0 && coastal) {
+      const cliff = this._keepAt(this.keepOut.cliff, x, z);
+      if (cliff > 0) {
+        const top = Math.max(lerp(land, 9, smoothstep(d.coast - 330, d.coast - 150, reach) * 0.8), 7 + fbm(this.noiseC, x / 60, z / 60, 2) * 3);
+        shore = lerp(shore, lerp(top, -4, smoothstep(d.coast - 142, d.coast - 122, reach)), cliff);
+      }
+    }
+    return lerp(shore, SEA_FLOOR, smoothstep(d.coast - 120, d.coast + 40, reach));
   }
 
   baseHeight(x, z) {
