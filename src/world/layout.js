@@ -172,12 +172,32 @@ export const CONNECTORS = [
   { id: "toUSA", from: "britain", to: "usa", bridge: "suspension", points: [[-580, -90], [-690, -82], [-820, -60], [-1100, -30], [-1380, -8], [-1460, 0], [-1500, 0]] },
 ];
 
-// Drag strips: { x, z, heading, length } for each strip's start, its heading
-// (radians, like the car's) and its full length in metres, in world
-// coordinates (not stretched by WORLD_SCALE). None yet; the
-// ground shaping in islands.js keeps its crags and cliffs well away from
-// whatever is listed here, the same as from roads.
-export const DRAG_STRIPS = [];
+// Drag strips: { x, z, heading, length } for each strip's start (the back of
+// its staging box), its heading (radians, like the car's) and its full length
+// in metres, in world coordinates (not stretched by WORLD_SCALE). Where the
+// land is tight the run-off is shorter, so `length` varies. `link` is the
+// link road's control points, from a point on the public road to where it
+// meets the strip: the back of the staging box (`entry: "back"`) or the
+// middle of one side of it ("left" / "right", seen driving down the strip).
+// Picked by tools/plan-dragstrips.mjs and frozen here, so they never move.
+// The ground shaping in islands.js keeps its crags and cliffs well away from
+// them, the same as from roads.
+export const DRAG_STRIPS = [
+  { id: "britain-south-west", name: "Drag strip · Britain south-west", island: "britain", x: -258.38, z: -315.12, heading: 3.8397, length: 662, entry: "right", link: [[-318.38, -287.21], [-296.52, -309.23], [-277.37, -325.3]] },
+  { id: "britain-north", name: "Drag strip · Britain north", island: "britain", x: -397.82, z: 627.54, heading: 1.2566, length: 622, entry: "right", link: [[-256.46, 417.52], [-368.6, 602.33], [-376.33, 626.11]] },
+  { id: "france-south-west", name: "Drag strip · France south-west", island: "france", x: 2061.16, z: -273.14, heading: 2.3038, length: 702, entry: "left", link: [[2174.28, -211.41], [2098.1, -261.99], [2081.37, -280.57]] },
+  { id: "france-north-west", name: "Drag strip · France north-west", island: "france", x: 2098.03, z: 416.5, heading: 1.0472, length: 662, entry: "right", link: [[2234.76, 86.29], [2131.85, 397.92], [2119.35, 419.57]] },
+  { id: "egypt-south", name: "Drag strip · Egypt south", island: "egypt", x: 182.79, z: -3370.25, heading: 4.7473, length: 702, entry: "right", link: [[178.58, -3250.43], [163.95, -3336.57], [163.08, -3361.56]] },
+  { id: "egypt-north-east", name: "Drag strip · Egypt north-east", island: "egypt", x: 416.78, z: -2927.91, heading: 5.7945, length: 702, entry: "back", link: [[482.02, -3033.42], [444.95, -2980.89], [416.78, -2927.91]] },
+  { id: "usa-south", name: "Drag strip · USA south", island: "usa", x: -3068.79, z: -635.75, heading: 1.6057, length: 702, entry: "left", link: [[-3051.15, -497.97], [-3047.65, -603.47], [-3048.52, -628.45]] },
+  { id: "usa-west", name: "Drag strip · USA west", island: "usa", x: -3422.48, z: -78.14, heading: 0.0698, length: 622, entry: "right", link: [[-3341.34, -64.58], [-3388.17, -60.5], [-3413.11, -58.75]] },
+];
+
+// Every strip's shape (metres): a staging box, the timed quarter mile and a
+// run-off to stop in, four lanes wide. `apron` is how far each side of the
+// middle the ground is levelled and kept free of trees (barriers, grandstand,
+// flags and lights stand on it).
+export const DRAG_STRIP = { stage: 40, run: 402, runoff: 260, lanes: 4, lane: 4, apron: 22 };
 
 // Deck heights above the sea. Tower Bridge sits lower, like the real one, so
 // the road can climb up to it from the beach within the grade limit.

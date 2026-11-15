@@ -31,6 +31,9 @@ import { renderMapImage, MiniMap, BigMap, PLACES, setFuelStations } from "./map.
 import { GARAGE, stats, applyPaint } from "./garage.js";
 import { DayNight, TIME_PRESETS } from "./daynight.js";
 import { NightLights } from "./nightlights.js";
+import { planDragStrips, buildDragStrips } from "./world/dragstrips.js";
+import { DragRace } from "./race.js";
+import { setDragStrips } from "./map.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -114,6 +117,8 @@ async function start() {
   const colliders = new Colliders();
   // Fuel stations are planned before the ground is built, so it can be levelled under them.
   const stations = planStations(world);
+  // ...and so are the drag strips (levelled, and kept free of trees).
+  const strips = planDragStrips(world);
   setProgress(0.22, "Laying the land and sea…");
   await nextFrame();
   buildTerrain(scene, world);
@@ -124,10 +129,11 @@ async function start() {
   const town = await buildTown(scene, world, colliders);
   const landmarks = buildLandmarks(scene, world, colliders);
   const stationParts = buildStations(scene, world, colliders, stations);
+  const dragParts = buildDragStrips(scene, world, colliders, strips);
   const landmarkModels = new LandmarkModels(scene, world, colliders);
   const parks = buildParks(scene, world, colliders, town.parks, preset, town.lampGlow);
-  town.lampSpots.push(...stationParts.lampSpots, ...parks.lampSpots);
-  const flags = buildFlags(scene, world, colliders, { roofs: town.roofs, parks: town.parks, stations });
+  town.lampSpots.push(...stationParts.lampSpots, ...parks.lampSpots, ...dragParts.lampSpots);
+  const flags = buildFlags(scene, world, colliders, { roofs: town.roofs, parks: town.parks, stations, strips });
   // (Mixed in near the front, so some people stroll in the parks even when there are few people.)
   parks.walkSpots.forEach((sp, i) => town.pavementSpots.splice(Math.min(town.pavementSpots.length, i * 3), 0, sp));
   setProgress(0.42, "Planting trees…");
@@ -186,7 +192,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters, ...dragParts.casters]) csm.addShadowCaster(m, false);
   // Real landmark models load as you get near them.
   landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
   landmarkModels.update(SPAWN.x, SPAWN.z);
@@ -269,6 +275,45 @@ async function start() {
   document.addEventListener("pointerdown", () => audio.start(), true);
   document.addEventListener("keydown", () => audio.start(), true);
 
+  // ---------- Drag races ----------
+  // A kind of vehicle loaded only for a race goes again afterwards (it costs
+  // graphics memory), unless it was on the roads to begin with or one is
+  // parked somewhere.
+  const roadKinds = new Set(traffic.types.map((t) => t.id));
+  const releaseKinds = (ids) => {
+    for (const id of ids) {
+      const t = traffic.type(id);
+      if (!t || roadKinds.has(id) || traffic.cars.some((c) => c.type === t)) continue;
+      traffic.types = traffic.types.filter((k) => k !== t);
+      nightLights.lodHead = nightLights.lodHead.filter((m) => !t.lights?.includes(m));
+      csm.removeShadowCaster(t.mesh, false);
+      t.mesh.dispose(false, true);
+    }
+  };
+  const race = new DragRace({
+    vehicle,
+    traffic,
+    audio,
+    fuel,
+    settings,
+    save: saveSettings,
+    boardTexture: dragParts.boardTexture,
+    hooks: {
+      entry: () => carEntry,
+      place: (x, z, heading) => {
+        vehicle.place(x, z, heading);
+        chase._first = true;
+      },
+      toast,
+      ready: () => mode === "drive" && !autodriver.active,
+      onStart: () => {
+        autodriver.stop();
+        $("auto-chip").hidden = true;
+      },
+      kinds: { load: trafficKind, release: releaseKinds },
+    },
+  });
+
   // ---------- Map and self-driving ----------
   const navigator = new Navigator(world);
   const autodriver = new AutoDriver(world, navigator);
@@ -285,6 +330,7 @@ async function start() {
 
   const input = new Input();
   const resetCar = () => {
+    race.end();
     const { road: r, index } = world.network.nearest(vehicle.x, vehicle.z);
     const [x, z] = r.points[index];
     const [tx, tz] = r.tangents[index];
@@ -389,6 +435,7 @@ async function start() {
   $("btn-action").addEventListener("click", async () => {
     if (swapping) return;
     if (mode === "drive") {
+      race.end();
       // Step out on the driver's side. If that spot is far below the car (off
       // the edge of a bridge deck), try the other side, then right beside the
       // car, so you never drop into the sea.
@@ -465,6 +512,13 @@ async function start() {
     return n[0].toUpperCase() + n.slice(1);
   };
   for (const s of stations) PLACES.push({ name: shortName(s), country: s.island.name, x: s.x, z: s.z, station: s });
+  // Drag strips: picking one drives you into its staging box.
+  setDragStrips(strips);
+  for (const s of strips) {
+    const country = world.islandById(s.island).def.name;
+    const where = s.name.replace("Drag strip · ", "").replace(`${country} `, "");
+    PLACES.push({ name: `${where[0].toUpperCase()}${where.slice(1)} strip`, country, x: s.tx, z: s.tz, strip: s });
+  }
   // Places, a country at a time: pick a country, then its landmarks, towns or
   // fuel stations. Starts on the country you're in.
   const COUNTRIES = world.islands.map((isl) => ({ id: isl.def.id, name: isl.def.name, x: isl.def.cx, z: isl.def.cz, flag: flagPicture(isl.def.id) }));
@@ -472,8 +526,9 @@ async function start() {
     ["landmark", "Landmarks"],
     ["town", "Towns"],
     ["fuel", "Fuel"],
+    ["race", "Races"],
   ];
-  const kindOf = (p) => (p.station ? "fuel" : p.landmark ? "landmark" : "town");
+  const kindOf = (p) => (p.strip ? "race" : p.station ? "fuel" : p.landmark ? "landmark" : "town");
   let placeCountry = COUNTRIES[0];
   let placeKind = "landmark";
   const button = (parent, html, onClick, on = false) => {
@@ -518,14 +573,18 @@ async function start() {
     const me = playerPos();
     for (const p of PLACES.filter((q) => q.country === placeCountry.name && kindOf(q) === placeKind)) {
       const km = Math.hypot(p.x - me.x, p.z - me.z) / 1000;
-      button(list, `${p.name}<small>${km < 1 ? "Under 1 km away" : `${km.toFixed(1)} km away`}</small>`, () => {
-        pickDestination(p.x, p.z, p.station?.name ?? p.name, p.station ?? null);
+      // (A drag strip also shows your best time there, and your best medal.)
+      const best = p.strip ? race.bestText(p.strip) : "";
+      const medal = p.strip ? settings.races[p.strip.id]?.medal : null;
+      button(list, `${p.name}<small>${km < 1 ? "Under 1 km away" : `${km.toFixed(1)} km away`}${best ? ` · ${best}` : ""}${medal ? `<i class="medal-dot ${medal}"></i>` : ""}</small>`, () => {
+        pickDestination(p.x, p.z, p.station?.name ?? p.strip?.name ?? p.name, p.station ?? null);
         bigmap.centreOn(p.x, p.z);
       });
     }
   };
   renderPlaces();
   $("minimap").addEventListener("click", () => {
+    race.end();
     mapPanel.hidden = false;
     // Start on the country you're in (on a bridge, keep the last one).
     const here = playerPos();
@@ -618,6 +677,7 @@ async function start() {
     }
   };
   $("btn-garage").addEventListener("click", () => {
+    race.end();
     renderGarage();
     garagePanel.hidden = false;
   });
@@ -742,7 +802,8 @@ async function start() {
     const dynamicCars = traffic.colliders();
     if (mode === "drive") {
       let controls = input;
-      if (autodriver.active) {
+      if (race.active) controls = race.controls(input);
+      else if (autodriver.active) {
         controls = autodriver.drive(vehicle, traffic, dt);
         if (autodriver.arrived) {
           $("auto-chip").hidden = true;
@@ -769,6 +830,7 @@ async function start() {
       nearbyCar = own.some((c) => Math.hypot(c.x - p.x, c.z - p.z) < c.r + 1.8) ? "own" : t;
     }
     const me = playerPos();
+    race.update(dt);
     traffic.update(dt, mode === "foot" ? people.player : vehicle, chase.camera);
     const fuelWarning = fuel.update(dt, vehicle, mode === "drive");
     if (fuelWarning) toast(fuelWarning);
@@ -886,7 +948,8 @@ async function start() {
     const limit = settings.units === "mph" ? Math.round((limitKmh * 0.621371) / 5) * 5 : limitKmh;
     if (limit !== shownLimit) {
       shownLimit = limit;
-      $("limit-num").textContent = limit;
+      // (No limit on a drag strip: the sign shows a dash.)
+      $("limit-num").textContent = Number.isFinite(limit) ? limit : "–";
     }
     const over = speed > limit;
     if (over !== shownOver) {
@@ -946,7 +1009,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, settings };
   }
 }
 

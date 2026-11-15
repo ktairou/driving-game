@@ -1,5 +1,5 @@
 import { clamp, lerp, smoothstep } from "../noise.js";
-import { ISLANDS, CONNECTORS, EXTRA_ROADS, ROAD_SAMPLE_STEP, BRIDGE_DECK } from "./layout.js";
+import { ISLANDS, CONNECTORS, EXTRA_ROADS, DRAG_STRIPS, DRAG_STRIP, ROAD_SAMPLE_STEP, BRIDGE_DECK } from "./layout.js";
 
 const TOWER_BRIDGES = ISLANDS.flatMap((isl) => isl.landmarks).filter((lm) => lm.type === "towerBridge");
 
@@ -127,6 +127,23 @@ function levelSpan(h, i0, i1, height, grade) {
   }
 }
 
+// A drag strip's level height: halfway between the lowest and highest natural
+// ground under its lanes, so the deepest cut or fill is as small as it can be.
+export function stripHeight(world, s) {
+  const fx = Math.sin(s.heading);
+  const fz = Math.cos(s.heading);
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let u = -10; u <= s.length + 10; u += 6) {
+    for (const w of [-10, 0, 10]) {
+      const b = world.baseHeight(s.x + fx * u + fz * w, s.z + fz * u - fx * w);
+      lo = Math.min(lo, b);
+      hi = Math.max(hi, b);
+    }
+  }
+  return (lo + hi) / 2;
+}
+
 function tangentsOf(points, closed) {
   const n = points.length;
   return points.map((p, i) => {
@@ -208,6 +225,39 @@ export class RoadNetwork {
       const road = this._add({ id: c.id, island: c.island ?? null, closed: false, points, heights: h, bridge, drive: c.drive, style: c.bridge ?? null, from: c.from, to: c.to, towerSpan });
       if (startJ) this.junctions.push({ road, end: 0, other: startJ.road, at: startJ.at });
       if (endJ) this.junctions.push({ road, end: n - 1, other: endJ.road, at: endJ.at });
+    }
+
+    // Drag strips (layout.js): each strip is a road of its own, dead straight
+    // and dead level, with a link road from the public road to its staging
+    // box. Both have style "drag", which keeps traffic off them.
+    for (const s of DRAG_STRIPS) {
+      const fx = Math.sin(s.heading);
+      const fz = Math.cos(s.heading);
+      const count = Math.round(s.length / ROAD_SAMPLE_STEP) + 1;
+      const points = Array.from({ length: count }, (_, i) => [s.x + fx * i * ROAD_SAMPLE_STEP, s.z + fz * i * ROAD_SAMPLE_STEP]);
+      s.height = stripHeight(world, s);
+      const drive = world.islandById(s.island).def.drive;
+      const strip = this._add({ id: s.id, island: s.island, closed: false, points, heights: points.map(() => s.height), bridge: points.map(() => false), drive, style: "drag", strip: s });
+      // The link: from the public road (at that road's height) to the strip
+      // (at the strip's), following the ground in between.
+      const lp = buildCurve(s.link, ROAD_SAMPLE_STEP, false);
+      const n = lp.length;
+      const h = lp.map(([x, z]) => Math.max(world.baseHeight(x, z), 2.5));
+      smoothHeights(h, false, 22, 4);
+      const startJ = this._snap(lp[0]);
+      const at = s.entry === "back" ? 0 : Math.round(DRAG_STRIP.stage / 2 / ROAD_SAMPLE_STEP);
+      for (let i = 0; i < n; i++) {
+        if (startJ) h[i] = lerp(startJ.road.heights[startJ.at], h[i], smoothstep(0, 25, i));
+        h[i] = lerp(s.height, h[i], smoothstep(0, 25, n - 1 - i));
+      }
+      // Its last few metres are as level as the strip (dragstrips.js levels the ground there).
+      for (let i = n - 4; i < n; i++) h[i] = s.height;
+      limitGrade(h, false, 0.085, new Set([0, n - 4, n - 3, n - 2, n - 1]));
+      const link = this._add({ id: `${s.id}-link`, island: s.island, closed: false, points: lp, heights: h, bridge: lp.map(() => false), drive, style: "drag", linkOf: s });
+      if (startJ) this.junctions.push({ road: link, end: 0, other: startJ.road, at: startJ.at });
+      this.junctions.push({ road: link, end: n - 1, other: strip, at });
+      s.road = strip;
+      s.linkRoad = link;
     }
 
     // Places where two roads cross (e.g. an avenue across a main street).

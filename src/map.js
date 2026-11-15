@@ -37,6 +37,30 @@ function drawFuelBadge(c, x, y, r) {
   c.fillRect(x - r * 0.38, y - r * 0.45, r * 0.5, r * 0.9);
   c.fillRect(x + r * 0.12, y - r * 0.2, r * 0.3, r * 0.12);
 }
+// Drag strips, shown as small chequered badges on both maps.
+let RACES = [];
+export function setDragStrips(list) {
+  RACES = list;
+}
+
+function drawRaceBadge(c, x, y, r) {
+  c.save();
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.fillStyle = "#ffffff";
+  c.fill();
+  c.clip();
+  // Three by three squares, black on white.
+  const q = (r * 2) / 3;
+  c.fillStyle = "#15181c";
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if ((i + j) % 2 === 0) c.fillRect(x - r + i * q, y - r + j * q, q, q);
+  c.restore();
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.lineWidth = r * 0.22;
+  c.strokeStyle = "#15181c";
+  c.stroke();
+}
 const toWorld = (px, py) => [X0 + px * MPP, Z1 - py * MPP];
 
 // Paints the whole world once: sea, beaches, hills (with shading), towns, roads.
@@ -116,6 +140,8 @@ export function renderMapImage(world, parks = []) {
   };
   for (const r of world.network.roads) drawRoad(r, 7, "#3b3f45");
   for (const r of world.network.roads) drawRoad(r, 3.5, r.closed ? "#f4f1e8" : "#ffe08a");
+  // Drag strips: wide and dark.
+  for (const r of world.network.roads) if (r.strip) drawRoad(r, 6, "#24282d");
   // Country names
   ctx.textAlign = "center";
   ctx.font = "bold 34px -apple-system, Segoe UI, sans-serif";
@@ -215,6 +241,7 @@ export class MiniMap {
     c.drawImage(this.image, 0, 0);
     drawRoute(c, route, progress);
     for (const s of FUEL) drawFuelBadge(c, ...toPx(s.x, s.z), 4.5);
+    for (const s of RACES) drawRaceBadge(c, ...toPx(s.mapX, s.mapZ), 4.5);
     if (destination) {
       const [dx, dy] = toPx(destination.x, destination.z);
       c.beginPath();
@@ -341,6 +368,7 @@ export class BigMap {
       c.fillText(p.name, sx, sy - 12);
     }
     for (const s of FUEL) drawFuelBadge(c, ...screen(s.x, s.z), 9);
+    for (const s of RACES) drawRaceBadge(c, ...screen(s.mapX, s.mapZ), 9);
     if (this.destination) {
       const [dx, dy] = screen(this.destination.x, this.destination.z);
       drawPin(c, dx, dy, "#e2574c");

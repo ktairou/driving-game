@@ -9,12 +9,15 @@ export const PRESETS = {
 export const LEVELS = ["low", "medium", "high"];
 
 const KEY = "drivingGame.settings.v1";
-const DEFAULTS = { graphics: "auto", units: "kmh", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real" };
+// races: drag race results per strip id, { best: { time, car }, cars: { [car id]: { time, medal } } }.
+const DEFAULTS = { graphics: "auto", units: "kmh", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real", races: {}, raceLevel: "medium" };
 
 export function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
     const settings = { ...DEFAULTS, ...saved };
+    // (Its own copy, and a fresh one if what was saved is broken.)
+    settings.races = settings.races && typeof settings.races === "object" ? { ...settings.races } : {};
     // Speeds and limits show in km/h now (the signs read 70 in towns, 140
     // outside). Everyone is switched over once; after that the choice in
     // Settings sticks.
@@ -24,7 +27,7 @@ export function loadSettings() {
     }
     return settings;
   } catch {
-    return { ...DEFAULTS };
+    return { ...DEFAULTS, races: {} };
   }
 }
 

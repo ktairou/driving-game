@@ -1,0 +1,195 @@
+/* ---------- Drag races (race.js) ---------- */
+
+/* The Race button sits where the Fill up button does (they never both show). */
+.race-action {
+  bottom: calc(150px + var(--safe-b));
+}
+
+/* Lights, stopwatch and place, under the top of the screen. */
+.race-hud {
+  position: absolute;
+  top: calc(58px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  pointer-events: none !important;
+}
+
+.race-lights {
+  display: flex;
+  gap: 6px;
+}
+
+.race-lights i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.race-lights i.amber {
+  background: #ffb02e;
+  box-shadow: 0 0 10px #ffb02e;
+}
+
+.race-lights i.green {
+  background: #3fdc7f;
+  box-shadow: 0 0 10px #3fdc7f;
+}
+
+.race-lights i.red {
+  background: #ff4a3d;
+  box-shadow: 0 0 10px #ff4a3d;
+}
+
+.race-clock {
+  min-width: 3.6ch;
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.race-place {
+  min-width: 2.4ch;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* The start panel and the result card. */
+.race-card {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.race-card .note {
+  margin: 0 0 6px;
+}
+
+.race-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.race-buttons button {
+  padding: 14px;
+  font-size: 16px;
+}
+
+.race-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.race-top h2 {
+  margin: 0 0 2px;
+}
+
+.race-medal {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.race-medal.gold {
+  background: #e8b923;
+  color: #2b2104;
+}
+
+.race-medal.silver {
+  background: #c9ced6;
+  color: #1d2229;
+}
+
+.race-medal.bronze {
+  background: #c47a3a;
+  color: #2a1606;
+}
+
+.race-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.race-stats div {
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.race-stats span {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.race-stats b {
+  display: block;
+  margin-top: 2px;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.race-note {
+  margin: 12px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.race-table {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.race-table li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.race-table li.you {
+  background: rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+}
+
+/* A small medal dot after a strip's best time in the map list. */
+.places .medal-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-left: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.medal-dot.gold {
+  background: #e8b923;
+}
+
+.medal-dot.silver {
+  background: #c9ced6;
+}
+
+.medal-dot.bronze {
+  background: #c47a3a;
+}

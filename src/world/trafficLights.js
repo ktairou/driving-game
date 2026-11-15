@@ -1,10 +1,13 @@
 import { MeshBuilder, StandardMaterial, Color3, Matrix, Quaternion, Vector3 } from "@babylonjs/core";
 import { mulberry32 } from "../noise.js";
 import { inTown } from "./road.js";
+import { dragStripAt } from "./dragstrips.js";
 import { ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./layout.js";
 
-// Speed limits (km/h): 60 where there are houses, 120 everywhere else.
+// Speed limits (km/h): 70 where there are houses, 140 everywhere else, and
+// none on a drag strip.
 export function speedLimitAt(x, z) {
+  if (dragStripAt(x, z)) return Infinity;
   return inTown(x, z, 20) ? 70 : 140;
 }
 
@@ -47,6 +50,7 @@ export class TrafficLights {
       if (inTown(c.x, c.z, 40)) add(c.x, c.z, [{ road: c.a, index: c.i, group: 0 }, { road: c.b, index: c.j, group: 1 }]);
     }
     for (const j of net.junctions) {
+      if (j.road.style === "drag") continue; // no lights on the way to a drag strip
       const [x, z] = j.road.points[j.end];
       // The side road only has traffic arriving one way: towards its end.
       if (inTown(x, z, 40)) add(x, z, [{ road: j.other, index: j.at, group: 0 }, { road: j.road, index: j.end, group: 1, dir: j.end === 0 ? -1 : 1 }]);

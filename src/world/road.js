@@ -114,6 +114,7 @@ export function buildRoad(scene, world, colliders) {
   };
 
   for (const road of world.network.roads) {
+    if (road.strip) continue; // a drag strip draws itself (dragstrips.js)
     const F = frames(road);
     const n = road.count;
     const closed = road.closed;

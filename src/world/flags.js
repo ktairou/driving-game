@@ -298,7 +298,7 @@ function welcomeBoard(scene, id, name) {
   return m;
 }
 
-export function buildFlags(scene, world, colliders, { roofs, parks, stations }) {
+export function buildFlags(scene, world, colliders, { roofs, parks, stations, strips = [] }) {
   const rand = mulberry32(1776);
   const net = world.network;
   const WIND = 0.5; // which way the flags fly (radians, round the pole)
@@ -429,6 +429,9 @@ export function buildFlags(scene, world, colliders, { roofs, parks, stations }) 
       fly(country ?? countryAt(fx, fz), fx, fz, 10, 2);
     }
   }
+
+  // 9. A row down one side of every drag strip, so it shows from far off.
+  for (const s of strips) for (const [x, z] of s.flagSpots) fly(s.island, x, z, 10, 2.2);
 
   // --- Meshes ------------------------------------------------------------------
   const meshes = [];

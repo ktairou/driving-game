@@ -409,7 +409,9 @@ export class AutoDriver {
       if (room < 8) target = Math.min(target, Math.max(0, (room - 0.6) * 1.2));
     }
 
-    if (left < 8 && speed < 1) {
+    // (Arrived once stopped: hand over any sooner and the car rolls on, out of
+    // a pump's bay or a drag strip's staging box.)
+    if (left < 8 && speed < 0.15) {
       this.arrived = true;
       this.route = null;
       return HOLD;

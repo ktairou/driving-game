@@ -16,9 +16,16 @@ export class World {
     this.slabs = []; // raised flat areas such as pavements, added by the towns
   }
 
-  // Places kept free of trees and rocks (fuel stations).
+  // Places kept free of trees and rocks: circles (fuel stations) and turned
+  // rectangles (drag strips: half sizes hu along (ux, uz), hw across it).
   isClear(x, z) {
-    return !this.clearAreas?.some((a) => Math.abs(x - a.x) < a.r && Math.abs(z - a.z) < a.r && Math.hypot(x - a.x, z - a.z) < a.r);
+    return !this.clearAreas?.some((a) => {
+      if (Math.abs(x - a.x) >= a.r || Math.abs(z - a.z) >= a.r) return false;
+      if (!a.hu) return Math.hypot(x - a.x, z - a.z) < a.r;
+      const rx = x - a.x;
+      const rz = z - a.z;
+      return Math.abs(rx * a.ux + rz * a.uz) < a.hu && Math.abs(rx * a.uz - rz * a.ux) < a.hw;
+    });
   }
 
   // A raised flat area (a pavement): its top counts as the ground.

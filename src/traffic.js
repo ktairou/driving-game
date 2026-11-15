@@ -69,13 +69,15 @@ export class Traffic {
     for (const t of types) this.addType(t);
 
     // Junction lookup: which samples of a loop lead onto a connector.
+    // (Never onto the way to a drag strip: traffic keeps off those.)
     this.junctionsByRoad = new Map();
     for (const j of world.network.junctions) {
+      if (j.road.style === "drag") continue;
       if (!this.junctionsByRoad.has(j.other)) this.junctionsByRoad.set(j.other, []);
       this.junctionsByRoad.get(j.other).push(j);
     }
 
-    const roads = world.network.roads;
+    const roads = world.network.roads.filter((r) => r.style !== "drag");
     for (let k = 0; k < quality.traffic; k++) {
       const road = roads[k % roads.length];
       const s = this.rand() * (road.count - 1);
@@ -212,7 +214,8 @@ export class Traffic {
       const towed = this.cars.filter((c) => c.abandoned && Math.hypot(c.x - player.x, c.z - player.z) > 200);
       if (towed.length) this.cars = this.cars.filter((c) => !towed.includes(c));
     }
-    const moving = this.cars.filter((c) => c.moving);
+    // (Cars in a drag race are driven by the race, race.js.)
+    const moving = this.cars.filter((c) => c.moving && !c.racing);
     for (const car of moving) {
       // Target speed: cruising, slower in towns and on bends.
       let target = inTown(car.x, car.z, 10) ? 9 : car.cruise;

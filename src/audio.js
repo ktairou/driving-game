@@ -175,6 +175,29 @@ export class GameAudio {
     this._burst("lowpass", 1200, 1, 1.4);
   }
 
+  // A short beep for the drag strip's start lights: lower for each amber,
+  // higher and longer for green.
+  beep(high = false) {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.type = "square";
+    o.frequency.value = high ? 1320 : 660;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 2600;
+    const g = ctx.createGain();
+    const now = ctx.currentTime;
+    const len = high ? 0.42 : 0.16;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.16, now + 0.01);
+    g.gain.setValueAtTime(0.16, now + len - 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + len);
+    o.connect(f).connect(g).connect(this.master);
+    o.start(now);
+    o.stop(now + len + 0.02);
+  }
+
   // Called every frame. `car` is the vehicle (or null when walking).
   update(dt, { car, onFoot, inCabin }) {
     if (!this.ctx || this.ctx.state !== "running") return;

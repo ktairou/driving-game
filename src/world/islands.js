@@ -1,5 +1,5 @@
 import { createNoise2D, fbm, smoothstep, lerp, clamp } from "../noise.js";
-import { ISLANDS, EXTRA_ROADS, CONNECTORS, DRAG_STRIPS, ROAD_HALF_WIDTH } from "./layout.js";
+import { ISLANDS, EXTRA_ROADS, CONNECTORS, DRAG_STRIPS, DRAG_STRIP, ROAD_HALF_WIDTH } from "./layout.js";
 import { buildCurve } from "./network.js";
 
 const CELL = 2; // physics height grid spacing in metres
@@ -129,9 +129,12 @@ export class Island {
       point(lm.x, lm.z, r, r + 3 * KEEP_CELL);
       if (lm.hill) point(lm.x, lm.z + (lm.hill.dz ?? 0), lm.hill.r, lm.hill.r + 3 * KEEP_CELL);
     }
-    // Drag strips: their whole length, plus half their width.
+    // Drag strips: their whole length and levelled apron (barriers, grandstand,
+    // flags), and their link roads, padded like the other roads.
     for (const s of DRAG_STRIPS) {
-      for (let u = 0; u <= (s.length ?? 702); u += 4) point(s.x + Math.sin(s.heading) * u, s.z + Math.cos(s.heading) * u, 10);
+      const pad = DRAG_STRIP.apron + 8;
+      for (let u = -10; u <= (s.length ?? 702) + 10; u += 4) point(s.x + Math.sin(s.heading) * u, s.z + Math.cos(s.heading) * u, pad, pad + 3 * KEEP_CELL);
+      if (s.link) for (const [x, z] of buildCurve(s.link, 4, false)) if (this._nearGrid(x, z, 3 * KEEP_CELL)) point(x, z, ROAD_PAD);
     }
     // Spread outwards: forward then backward over the grid.
     const D = KEEP_CELL * Math.SQRT2;
