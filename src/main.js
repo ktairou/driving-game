@@ -8,6 +8,8 @@ import { buildRoad } from "./world/road.js";
 import { buildTown } from "./world/town.js";
 import { buildLandmarks } from "./world/landmarks.js";
 import { buildNature } from "./world/nature.js";
+import { buildGroundCover } from "./world/groundCover.js";
+import { updateWind } from "./world/wind.js";
 import { buildParks } from "./world/parks.js";
 import { buildFlags, flagPicture } from "./world/flags.js";
 import { SPAWN, LANE_OFFSET } from "./world/layout.js";
@@ -132,6 +134,7 @@ async function start() {
   setProgress(0.42, "Planting trees…");
   await nextFrame();
   const nature = buildNature(scene, world, colliders, preset, parks.trees);
+  const cover = buildGroundCover(scene, world, colliders, preset, nature.trunk);
 
   setProgress(0.46, "Bringing the car round…");
   // The concept car, or one of the downloaded vehicles.
@@ -184,7 +187,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters]) csm.addShadowCaster(m, false);
   // Real landmark models load as you get near them.
   landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
   landmarkModels.update(SPAWN.x, SPAWN.z);
@@ -223,7 +226,7 @@ async function start() {
   const findMats = (re) => scene.materials.filter((m) => re.test(m.name));
   const asphalt = findMats(/^(asphalt|asphaltTop|paintWhite|paintYellow|pavers)$/);
   for (const m of asphalt) m._baseTint = m.albedoColor.clone();
-  const weather = new Weather(scene, sky, world, preset, { asphalt, leaves: findMats(/^leaves/) });
+  const weather = new Weather(scene, sky, world, preset, { asphalt, leaves: findMats(/^(leaves|groundCover|palmFronds)/) });
   weather.set(settings.weather);
   const daynight = new DayNight(scene, sky, pipeline, weather, settings.hour);
   const nightLights = new NightLights(scene, { world, town, car, lod });
@@ -690,6 +693,7 @@ async function start() {
     if (i > 0) {
       level = LEVELS[i - 1];
       preset = { ...PRESETS[level], trees: preset.trees, rocks: preset.rocks };
+      cover.setEnabled(level !== "low");
       applyScale();
       applyEffects();
       chase.camera.maxZ = preset.viewDistance;
@@ -779,6 +783,7 @@ async function start() {
     weather.update(dt, chase.camera, vehicle);
     lights.update(dt);
     flags.update(dt);
+    updateWind(dt);
     if (mode === "drive" && lights.ranRed(vehicle.x, vehicle.z, vehicle.vx, vehicle.vz)) toast("You went through a red light!");
     daynight.update(dt);
     damage.update(dt, vehicle, daynight.night);
@@ -961,7 +966,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, GARAGE, swapCar, cabin, get car() { return car; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, GARAGE, swapCar, cabin, get car() { return car; } };
   }
 }
 
