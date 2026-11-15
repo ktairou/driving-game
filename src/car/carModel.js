@@ -1,5 +1,6 @@
 import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer, Quaternion, Matrix } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import { measureCockpit, samplePaint } from "./cabin.js";
 
 export const WHEEL_RADIUS = 0.38;
 const WHEELS = [
@@ -378,9 +379,16 @@ export async function loadVehicle(scene, id, onProgress) {
     length,
     height,
   };
-  // Where the driver's eyes are: big vehicles sit you right at the front.
+  // Where the driver's eyes are, measured from the model's own windows (see
+  // car/cabin.js); the old rule of thumb if no windscreen can be found.
   const big = length > 6.2;
-  const eye = new Vector3(0, height * (big ? 0.78 : 0.86), big ? max.z - 1.1 : geometry.frontZ - 1.2);
+  const cockpit = measureCockpit(id, body, meshes, geometry);
+  const eye = cockpit ? cockpit.eye.clone() : new Vector3(0, height * (big ? 0.78 : 0.86), big ? max.z - 1.1 : geometry.frontZ - 1.2);
+  if (cockpit && !cockpit.paint) {
+    // (Given a moment at most: a plain dark grey will do otherwise.)
+    const timeout = new Promise((r) => setTimeout(() => r(null), 1500));
+    cockpit.paint = await Promise.race([samplePaint(body, meshes, cockpit), timeout]).catch(() => null);
+  }
   const views = {
     bonnet: big ? new Vector3(0, height * 0.55, max.z + 0.25) : new Vector3(0, height * 0.8, geometry.frontZ - 0.1),
     bumper: new Vector3(0, Math.min(0.6, height * 0.3), max.z + 0.15),
@@ -397,6 +405,7 @@ export async function loadVehicle(scene, id, onProgress) {
     steeringPivot: null,
     steeringAxis: null,
     eye,
+    cockpit,
     views,
     lights: { head, tail: [] },
     wheelRadius: wheels.length ? avg(wheels, (w) => w.radius) : WHEEL_RADIUS,

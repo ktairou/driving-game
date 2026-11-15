@@ -151,6 +151,21 @@ button {
   display: none;
 }
 
+/* Driver view with a cockpit: its dials sit where the speed panel and the
+   Get out button usually are, so those move up (over the roof lining). */
+.hud-cockpit .speedo {
+  top: calc(64px + var(--safe-t));
+  bottom: auto;
+}
+
+.hud-cockpit .action {
+  bottom: calc(37% + var(--safe-b));
+}
+
+.hud-cockpit .fuel-action {
+  bottom: calc(37% + 58px + var(--safe-b));
+}
+
 .fps {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
