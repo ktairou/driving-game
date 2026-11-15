@@ -143,7 +143,8 @@ async function loadAvatar(scene, name) {
   mesh._createGlobalSubMesh(true);
 
   const mat = new PBRMaterial(`person-${name}`, scene);
-  mat.albedoTexture = new Texture(`${BASE}${name}.webp`, scene);
+  // The .ktx2 copy (tools/compress-textures.mjs) stays compressed in graphics memory.
+  mat.albedoTexture = new Texture(`${BASE}${name}.ktx2`, scene);
   mat.albedoTexture.hasAlpha = true;
   mat.useAlphaFromAlbedoTexture = true;
   mat.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST;

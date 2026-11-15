@@ -1,7 +1,9 @@
 // Makes a light version of the car for traffic and parked cars: no cabin
-// interior, and far fewer triangles. Run after fetch-assets:
+// interior, and far fewer triangles. Run after fetch-assets, then run
+// `node tools/compress-textures.mjs car`:
 //   node tools/make-lod.mjs
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
@@ -10,7 +12,10 @@ import { MeshoptSimplifier } from "meshoptimizer";
 import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const src = path.join(root, "public", "assets", "car", "concept_car.glb");
+// The game's copy has KTX2 pictures, which can't be shrunk: use the original
+// that compress-textures.mjs keeps, when there is one.
+const kept = path.join(root, "tools", ".cache", "ktx2-src", "car", "concept_car.glb");
+const src = existsSync(kept) ? kept : path.join(root, "public", "assets", "car", "concept_car.glb");
 const out = path.join(root, "public", "assets", "car", "concept_car_lod.glb");
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);

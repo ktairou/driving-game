@@ -3,7 +3,8 @@
 //
 //   npm run assets
 //
-// Raw downloads are cached in tools/.cache so re-runs are quick.
+// Raw downloads are cached in tools/.cache so re-runs are quick. Afterwards
+// run `node tools/compress-textures.mjs`: the game loads the .ktx2 copies.
 import { mkdir, writeFile, readFile, access, copyFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

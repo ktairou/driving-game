@@ -7,8 +7,9 @@
 Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 Changes: the Khronos and 3D Commerce logos were removed and the number plate
-was replaced. `public/assets/car/concept_car.glb` is the original model; the
-changes are made when the game loads it. `concept_car_lod.glb` is a simplified
+was replaced. `public/assets/car/concept_car.glb` is the original model with
+its pictures compressed (see below); the other changes are made when the game
+loads it. `concept_car_lod.glb` is a simplified
 copy (no interior, fewer triangles, smaller textures) made by
 `tools/make-lod.mjs` for traffic and parked cars.
 
@@ -35,3 +36,12 @@ are generated in code; there are no outside files for them.
 ## Engine
 
 Made with [Babylon.js](https://www.babylonjs.com) (Apache 2.0).
+
+## Picture compression
+
+Most pictures are stored as KTX2 files so they stay small in graphics memory.
+They are made by `tools/compress-textures.mjs` with the
+[Basis Universal](https://github.com/BinomialLLC/basis_universal) encoder
+(Apache 2.0, © Binomial LLC), via the `ktx2-encoder` package (MIT). The game
+unpacks them with Babylon.js's KTX2 reader, which includes Basis Universal and
+Zstandard (BSD); those files are in `public/assets/ktx2/` with their licence.

@@ -3,3 +3,5 @@
 *.glb binary
 *.webp binary
 *.png binary
+*.ktx2 binary
+*.wasm binary

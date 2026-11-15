@@ -4,7 +4,7 @@
 //
 //   node tools/check.mjs [--level low|medium|high] [--car id] [--hour 12]
 //                        [--shots spots.json] [--script extra.js] [--out dir]
-//                        [--url http://localhost:5173/] [--timeout 240]
+//                        [--url http://localhost:5173/] [--timeout 240] [--offline]
 //
 // spots.json: [{ "name": "kingsford", "x": -560, "z": -3, "yaw": 1.57,
 //                "mode": "chase" | "cam", "h": 3, "dist": 8, "ty": 1,
@@ -14,6 +14,9 @@
 //          the ground there, looking at a point `ty` above (x, z).
 // --script: a file whose text is run in the page after loading, as the body
 //   of an async function with `g` = window.__game; its return value is printed.
+// --offline: Chrome can reach only localhost, to prove nothing (a CDN, say) is
+//   fetched from the internet. Requests to other hosts are always listed in
+//   the report under "external".
 //
 // Prints one JSON report and writes it (and the PNGs) to --out
 // (default tools/.cache/check).
@@ -38,6 +41,7 @@ const OUT = path.resolve(opt("out", path.join(root, "tools", ".cache", "check"))
 const SHOTS = opt("shots", null);
 const SCRIPT = opt("script", null);
 const SOFTWARE = argv.includes("--software");
+const OFFLINE = argv.includes("--offline");
 const PORT = 9333 + Math.floor(Math.random() * 400);
 
 const CHROME = ["C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"];
@@ -60,6 +64,7 @@ async function main() {
     "--enable-precise-memory-info",
     "--ignore-gpu-blocklist",
     ...(SOFTWARE ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] : []),
+    ...(OFFLINE ? ["--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost"] : []),
     "about:blank",
   ];
   const chrome = spawn(CHROME[0], flags, { stdio: "ignore" });
@@ -82,6 +87,7 @@ async function main() {
     let id = 0;
     const waiting = new Map();
     const errors = [];
+    const external = new Set();
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.id && waiting.has(m.id)) {
@@ -92,6 +98,9 @@ async function main() {
         errors.push(`exception: ${d.exception?.description ?? d.text}`.slice(0, 600));
       } else if (m.method === "Runtime.consoleAPICalled" && (m.params.type === "error" || m.params.type === "warning" && /couldn|failed/i.test(JSON.stringify(m.params.args)))) {
         errors.push(`console.${m.params.type}: ${m.params.args.map((a) => a.value ?? a.description ?? "").join(" ")}`.slice(0, 600));
+      } else if (m.method === "Network.requestWillBeSent") {
+        const u = m.params.request.url;
+        if (!/^(data|blob|about|chrome|devtools):|^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(u)) external.add(u.slice(0, 200));
       } else if (m.method === "Log.entryAdded" && m.params.entry.level === "error") {
         errors.push(`log: ${m.params.entry.text} ${m.params.entry.url ?? ""}`.slice(0, 600));
       }
@@ -103,16 +112,20 @@ async function main() {
         ws.send(JSON.stringify({ id: mid, method, params }));
       });
     const evaluate = async (expression, timeout = TIMEOUT) => {
+      // (The fallback timer is cleared, or it would keep this tool running for minutes after the report.)
+      let timer;
       const res = await Promise.race([
         send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true, timeout }),
-        sleep(timeout + 5000).then(() => ({ result: { result: { value: "__timeout__" } } })),
+        new Promise((r) => (timer = setTimeout(() => r({ result: { result: { value: "__timeout__" } } }), timeout + 5000))),
       ]);
+      clearTimeout(timer);
       if (res.result?.exceptionDetails) throw new Error(res.result.exceptionDetails.exception?.description ?? res.result.exceptionDetails.text);
       return res.result?.result?.value;
     };
     await send("Runtime.enable");
     await send("Log.enable");
     await send("Page.enable");
+    await send("Network.enable");
     await send("Emulation.setDeviceMetricsOverride", { width: 1024, height: 768, deviceScaleFactor: 1, mobile: false });
 
     // Settings first (same origin), then a fresh load.
@@ -128,12 +141,17 @@ async function main() {
     errors.length = 0;
     const t0 = Date.now();
     await send("Page.reload", { ignoreCache: true });
-    const loaded = await evaluate(`(async () => {
-      for (let i = 0; i < ${Math.round(TIMEOUT / 250)}; i++) { if (window.__game && window.__game.traffic) return true; await new Promise(r => setTimeout(r, 250)); }
-      return false; })()`);
+    // (If the old page is still being torn down, the wait comes back empty: try again.)
+    let loaded;
+    for (let tries = 0; tries < 10 && loaded === undefined; tries++) {
+      if (tries) await sleep(500);
+      loaded = await evaluate(`(async () => {
+        for (let i = 0; i < ${Math.round(TIMEOUT / 250)}; i++) { if (window.__game && window.__game.traffic) return true; await new Promise(r => setTimeout(r, 250)); }
+        return false; })()`);
+    }
     const loadMs = Date.now() - t0;
-    const report = { level: LEVEL, car: CAR, loaded, loadMs, errors };
-    if (!loaded) {
+    const report = { level: LEVEL, car: CAR, loaded, loadMs, errors, external };
+    if (loaded !== true) {
       report.page = await evaluate(`document.body.innerText.slice(0, 400)`).catch(() => null);
       return finish(report);
     }
@@ -146,11 +164,18 @@ async function main() {
       for (let i = 0; i < 3; i++) g.scene.render();
       t = performance.now(); for (let i = 0; i < 10; i++) { g.scene.render(); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); }
       const msRender = (performance.now() - t) / 10;
-      const seen = new Set(); let total = 0; const groups = {};
+      const seen = new Set(); let total = 0; const groups = {}; const formats = {};
+      // Compressed pictures (KTX2) keep their GL format in "format" (Babylon's own
+      // uncompressed formats are small numbers). 4x4 blocks of 8 bytes: half a
+      // byte a pixel (BC1, BC4, ETC1, ETC2 RGB, PVRTC 4 bpp); 16 bytes: one byte
+      // a pixel (BC3, BC5, BC7, ETC2 RGBA, ASTC 4x4).
+      const HALF = new Set([33776, 33777, 35916, 35917, 36283, 36284, 36196, 37488, 37489, 37492, 37493, 37494, 37495, 35840, 35842]);
       for (const tex of g.scene.textures) {
         const it = tex.getInternalTexture && tex.getInternalTexture(); if (!it || seen.has(it)) continue; seen.add(it);
         const faces = it.isCube ? 6 : 1;
-        const bpp = it._compression ? 1 : (it.type === 1 || it.type === 2 ? 16 : 4);
+        const compressed = it.format >= 0x8000;
+        if (compressed) formats[it.format] = (formats[it.format] || 0) + 1;
+        const bpp = compressed ? (HALF.has(it.format) ? 0.5 : 1) : it._compression ? 1 : (it.type === 1 || it.type === 2 ? 16 : 4);
         const mb = it.width * it.height * bpp * faces * (it.generateMipMaps ? 1.33 : 1) / 1e6;
         total += mb;
         const u = String(it.url || tex.url || tex.name || "");
@@ -161,7 +186,7 @@ async function main() {
       for (const k in groups) groups[k] = Math.round(groups[k]);
       let tris = 0; for (const mesh of g.scene.getActiveMeshes().data) { const n = mesh.getTotalIndices ? mesh.getTotalIndices() : 0; tris += (n / 3) * Math.max(1, mesh.thinInstanceCount || 0); }
       return {
-        msTick: +msTick.toFixed(2), msRender: +msRender.toFixed(1), textures: seen.size, textureMB: Math.round(total), groups,
+        msTick: +msTick.toFixed(2), msRender: +msRender.toFixed(1), textures: seen.size, textureMB: Math.round(total), groups, compressedFormats: formats,
         heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e6) : null,
         activeMeshes: g.scene.getActiveMeshes().length, activeTris: Math.round(tris),
         traffic: g.traffic.types.map(t => t.id).length, stations: g.stations.length,
@@ -219,6 +244,7 @@ async function main() {
 }
 
 async function finish(report) {
+  report.external = [...report.external];
   const text = JSON.stringify(report, null, 1);
   await writeFile(path.join(OUT, "report.json"), text);
   console.log(text);

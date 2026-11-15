@@ -1,6 +1,7 @@
 // Downloads realistic people from Microsoft's Rocketbox avatar library (MIT
 // licence) plus walking, running and standing animations, and shrinks their
-// textures for the iPad.
+// textures for the iPad. Afterwards run `node tools/compress-textures.mjs people`:
+// the game loads the .ktx2 copies.
 //   node tools/fetch-people.mjs
 import { mkdir, writeFile, readFile, access } from "node:fs/promises";
 import path from "node:path";

@@ -4,6 +4,7 @@
 //     the origin on the ground under the middle of the car;
 //   - each landmark is simplified for the iPad and stood on the origin.
 // Textures become WebP. A manifest with sizes goes next to each set.
+// Afterwards run `node tools/compress-textures.mjs` to turn them into KTX2.
 //   node tools/prepare-models.mjs
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";

@@ -1,4 +1,4 @@
-import { Engine, Scene, Color4, DefaultRenderingPipeline, ImageProcessingConfiguration, ColorCurves } from "@babylonjs/core";
+import { Engine, Scene, Color4, DefaultRenderingPipeline, ImageProcessingConfiguration, ColorCurves, KhronosTextureContainer2 } from "@babylonjs/core";
 import { PRESETS, LEVELS, loadSettings, saveSettings, startingLevel } from "./quality.js";
 import { setupSky, createShadows } from "./sky.js";
 import { World } from "./world/world.js";
@@ -31,6 +31,24 @@ import { DayNight, TIME_PRESETS } from "./daynight.js";
 import { NightLights } from "./nightlights.js";
 
 const $ = (id) => document.getElementById(id);
+
+// Most pictures are KTX2 files (made by tools/compress-textures.mjs), which stay
+// compressed in graphics memory. The code that unpacks them ships with the game
+// instead of coming from Babylon's website, so the game also works offline.
+// (Every entry must be set: a missing one falls back to the website.)
+const KTX2 = "assets/ktx2/";
+Object.assign(KhronosTextureContainer2.URLConfig, {
+  jsDecoderModule: `${KTX2}babylon.ktx2Decoder.js`,
+  wasmUASTCToASTC: `${KTX2}uastc_astc.wasm`,
+  wasmUASTCToBC7: `${KTX2}uastc_bc7.wasm`,
+  wasmUASTCToRGBA_UNORM: `${KTX2}uastc_rgba8_unorm_v2.wasm`,
+  wasmUASTCToRGBA_SRGB: `${KTX2}uastc_rgba8_srgb_v2.wasm`,
+  wasmUASTCToR8_UNORM: `${KTX2}uastc_r8_unorm.wasm`,
+  wasmUASTCToRG8_UNORM: `${KTX2}uastc_rg8_unorm.wasm`,
+  jsMSCTranscoder: `${KTX2}msc_basis_transcoder.js`,
+  wasmMSCTranscoder: `${KTX2}msc_basis_transcoder.wasm`,
+  wasmZSTDDecoder: `${KTX2}zstddec.wasm`,
+});
 
 const settings = loadSettings();
 let level = startingLevel(settings);

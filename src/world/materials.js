@@ -1,7 +1,10 @@
 import { Texture, PBRMaterial, Color3 } from "@babylonjs/core";
 
+// The .ktx2 copies (tools/compress-textures.mjs) use a quarter of the graphics
+// memory of the .webp originals. They are stored upside down, so they come out
+// the same way up as a .webp loaded with invertY.
 export function loadTexture(scene, file, { gamma = true, uScale = 1, vScale = 1, aniso = 4, hasAlpha = false } = {}) {
-  const t = new Texture(`assets/textures/${file}.webp`, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  const t = new Texture(`assets/textures/${file}.ktx2`, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
   t.gammaSpace = gamma;
   t.uScale = uScale;
   t.vScale = vScale;
