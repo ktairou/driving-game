@@ -7,6 +7,13 @@ import { ROAD_HALF_WIDTH, ISLANDS } from "./layout.js";
 
 const SECTOR = 900; // trees are grouped in 900 m squares so off-screen groups are skipped
 
+// How thick the woods are (0..1; trees start at about 0.42). The ground shader
+// gets the same value, so the forest floor is under the trees.
+const FOREST = createNoise2D(77);
+export function forestDensity(x, z) {
+  return fbm(FOREST, x / 260, z / 260, 3) * 0.5 + 0.5;
+}
+
 // Image rectangles (pixels, 1024 atlas) of single sprigs in the leaf atlases.
 // `stem` says which end of the rectangle the stem is on.
 const BROAD_SPRIGS = [
@@ -163,7 +170,6 @@ function instanceBySector(template, items, makeMatrix, withColor) {
 // extraTrees: [{ x, z, y }] planted on top of the countryside ones (the parks' trees).
 export function buildNature(scene, world, colliders, quality, extraTrees = []) {
   const rand = mulberry32(4242);
-  const forest = createNoise2D(77);
 
   // --- Pick spots, island by island ---------------------------------------------
   const totalShare = ISLANDS.reduce((s, i) => s + i.trees.share, 0);
@@ -178,7 +184,7 @@ export function buildNature(scene, world, colliders, quality, extraTrees = []) {
       for (let x = def.cx - lim; x < def.cx + lim; x += spacing) {
         const px = x + (rand() - 0.5) * spacing * 0.9;
         const pz = z + (rand() - 0.5) * spacing * 0.9;
-        const density = fbm(forest, px / 260, pz / 260, 3) * 0.5 + 0.5;
+        const density = forestDensity(px, pz);
         if (rand() > smoothstep(0.42, 0.7, density)) continue;
         // Keep trunks and branches well clear of every road.
         if (world.getRoadDistance(px, pz) < ROAD_HALF_WIDTH + 10) continue;
@@ -286,5 +292,6 @@ export function buildNature(scene, world, colliders, quality, extraTrees = []) {
     Matrix.Compose(new Vector3(it.s, it.s, it.s), Quaternion.RotationYawPitchRoll(it.yaw, it.tilt, it.tilt * 0.5), new Vector3(it.x, it.y, it.z));
   rockTemplates.forEach((t, i) => meshes.push(...instanceBySector(t, rockItems[i], rockMatrix, false)));
 
-  return { meshes, casters: meshes, counts: { broad: broad.length, firs: firs.length, rocks: placed } };
+  // (The broadleaf trunk is lent to the desert palms in groundCover.js.)
+  return { meshes, casters: meshes, counts: { broad: broad.length, firs: firs.length, rocks: placed }, trunk: broadTrunk };
 }

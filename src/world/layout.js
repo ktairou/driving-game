@@ -24,6 +24,7 @@ export const ISLANDS = [
     seed: 7,
     climate: "green",
     relief: 1,
+    fields: true, // patchwork farmland drawn on the flat ground (terrain.js)
     drive: "left",
     trees: { share: 0.4, firAbove: 30 },
     // One closed loop. The straight run of points at z = 0 is the main street.
@@ -61,6 +62,7 @@ export const ISLANDS = [
     seed: 21,
     climate: "green",
     relief: 0.6,
+    fields: true,
     drive: "right",
     trees: { share: 0.22, firAbove: 60 },
     road: at(1950, 0, [
@@ -169,6 +171,13 @@ export const CONNECTORS = [
   { id: "toEgypt", from: "britain", to: "egypt", bridge: "beam", points: [[200, -330], [204, -450], [196, -640], [150, -900], [70, -1180], [30, -1400], [10, -1470], [0, -1510]] },
   { id: "toUSA", from: "britain", to: "usa", bridge: "suspension", points: [[-580, -90], [-690, -82], [-820, -60], [-1100, -30], [-1380, -8], [-1460, 0], [-1500, 0]] },
 ];
+
+// Drag strips: { x, z, heading, length } for each strip's start, its heading
+// (radians, like the car's) and its full length in metres, in world
+// coordinates (not stretched by WORLD_SCALE). None yet; the
+// ground shaping in islands.js keeps its crags and cliffs well away from
+// whatever is listed here, the same as from roads.
+export const DRAG_STRIPS = [];
 
 // Deck heights above the sea. Tower Bridge sits lower, like the real one, so
 // the road can climb up to it from the beach within the grade limit.

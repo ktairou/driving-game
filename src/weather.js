@@ -1,15 +1,16 @@
 import { Color3, Color4, Mesh, VertexData, ShaderMaterial, MeshBuilder, StandardMaterial, Vector2, Vector3, Effect } from "@babylonjs/core";
 import { weatherFx } from "./world/terrain.js";
+import { wind } from "./world/wind.js";
 import { clamp, lerp } from "./noise.js";
 
 // Each weather type is a set of target values; the game eases between them.
 export const WEATHERS = [
-  { id: "sunny", name: "Sunny", sun: 4.2, env: 0.9, fog: 0.0011, fogColor: [0.64, 0.71, 0.79], overcast: 0, wet: 0, snow: 0, rain: 0, flakes: 0, grip: 1 },
-  { id: "cloudy", name: "Cloudy", sun: 1.7, env: 0.7, fog: 0.0015, fogColor: [0.6, 0.64, 0.68], overcast: 0.55, wet: 0, snow: 0, rain: 0, flakes: 0, grip: 1 },
-  { id: "rain", name: "Rain", sun: 0.7, env: 0.5, fog: 0.0024, fogColor: [0.46, 0.5, 0.54], overcast: 0.88, wet: 1, snow: 0, rain: 1, flakes: 0, grip: 0.82 },
-  { id: "storm", name: "Storm", sun: 0.35, env: 0.32, fog: 0.0031, fogColor: [0.28, 0.3, 0.34], overcast: 0.96, wet: 1, snow: 0, rain: 1.6, flakes: 0, grip: 0.76, lightning: true },
-  { id: "snow", name: "Snow", sun: 1.1, env: 0.75, fog: 0.0028, fogColor: [0.78, 0.8, 0.84], overcast: 0.8, wet: 0.2, snow: 1, rain: 0, flakes: 1, grip: 0.62 },
-  { id: "fog", name: "Fog", sun: 1.2, env: 0.65, fog: 0.011, fogColor: [0.72, 0.74, 0.76], overcast: 0.7, wet: 0.3, snow: 0, rain: 0, flakes: 0, grip: 0.95 },
+  { id: "sunny", name: "Sunny", sun: 4.2, env: 0.9, fog: 0.0011, fogColor: [0.64, 0.71, 0.79], overcast: 0, wet: 0, snow: 0, rain: 0, flakes: 0, grip: 1, wind: 0.35 },
+  { id: "cloudy", name: "Cloudy", sun: 1.7, env: 0.7, fog: 0.0015, fogColor: [0.6, 0.64, 0.68], overcast: 0.55, wet: 0, snow: 0, rain: 0, flakes: 0, grip: 1, wind: 0.55 },
+  { id: "rain", name: "Rain", sun: 0.7, env: 0.5, fog: 0.0024, fogColor: [0.46, 0.5, 0.54], overcast: 0.88, wet: 1, snow: 0, rain: 1, flakes: 0, grip: 0.82, wind: 0.85 },
+  { id: "storm", name: "Storm", sun: 0.35, env: 0.32, fog: 0.0031, fogColor: [0.28, 0.3, 0.34], overcast: 0.96, wet: 1, snow: 0, rain: 1.6, flakes: 0, grip: 0.76, lightning: true, wind: 1.3 },
+  { id: "snow", name: "Snow", sun: 1.1, env: 0.75, fog: 0.0028, fogColor: [0.78, 0.8, 0.84], overcast: 0.8, wet: 0.2, snow: 1, rain: 0, flakes: 1, grip: 0.62, wind: 0.5 },
+  { id: "fog", name: "Fog", sun: 1.2, env: 0.65, fog: 0.011, fogColor: [0.72, 0.74, 0.76], overcast: 0.7, wet: 0.3, snow: 0, rain: 0, flakes: 0, grip: 0.95, wind: 0.12 },
 ];
 
 // "Auto": the weather changes by itself every few minutes. How likely each
@@ -196,7 +197,7 @@ export class Weather {
     // About 4 s to settle when you pick the weather; a slow drift on Auto.
     const k = 1 - Math.exp(-dt * (this.auto ? 0.1 : 0.8));
     const c = this.cur;
-    for (const key of ["sun", "env", "fog", "overcast", "wet", "snow", "rain", "flakes", "grip"]) c[key] = lerp(c[key], t[key], k);
+    for (const key of ["sun", "env", "fog", "overcast", "wet", "snow", "rain", "flakes", "grip", "wind"]) c[key] = lerp(c[key], t[key], k);
     for (let i = 0; i < 3; i++) c.fogColor[i] = lerp(c.fogColor[i], t.fogColor[i], k);
 
     // Lightning in storms: a flash now, thunder a moment later.
@@ -228,6 +229,7 @@ export class Weather {
 
     weatherFx.x = c.wet;
     weatherFx.y = c.snow;
+    wind.strength = c.wind;
     for (const m of this.materials.asphalt) {
       m.roughness = lerp(1, 0.32, c.wet);
       const s = lerp(lerp(1, 0.62, c.wet), 1.7, c.snow * 0.6);
