@@ -44,7 +44,11 @@ export const ISLANDS = [
     landmarks: [
       { type: "model", model: "bigben", name: "Big Ben", x: -228, z: 24, base: 18, size: 72, yaw: Math.PI },
       { type: "model", model: "stonehenge", name: "Stonehenge", x: -130, z: 200, base: 34, size: 34, fit: "width" },
-      { type: "model", model: "towerbridge", name: "Tower Bridge", x: 60, z: 690, base: 70, size: 240, fit: "length", plateau: false, sea: true },
+      // Built in code (towerBridge.js) on the road to France: it starts `from`
+      // metres out from the British shore and is `length` metres long (neither
+      // is stretched by WORLD_SCALE). x, z are only for the map label; the
+      // game puts its middle on the road itself.
+      { type: "towerBridge", name: "Tower Bridge", road: "toFrance", from: 16, length: 276, x: 839, z: 0, base: 70, plateau: false, sea: true },
     ],
   },
   {
@@ -156,7 +160,9 @@ export const EXTRA_ROADS = [
 ];
 
 // Roads that join Britain to the other countries. Where they cross water
-// they become bridges. The USA one is a big red suspension bridge.
+// they become bridges. The USA one is a big red suspension bridge; the road to
+// France leaves Britain through Tower Bridge (see the landmark above), then
+// carries on to France as a plain bridge.
 export const CONNECTORS = [
   // Each starts and ends on a loop road's centre line (a T-junction).
   { id: "toFrance", from: "britain", to: "france", bridge: "beam", points: [[520, -10], [640, -6], [780, 0], [1050, 0], [1320, 0], [1440, 0], [1500, 0]] },
@@ -164,7 +170,9 @@ export const CONNECTORS = [
   { id: "toUSA", from: "britain", to: "usa", bridge: "suspension", points: [[-580, -90], [-690, -82], [-820, -60], [-1100, -30], [-1380, -8], [-1460, 0], [-1500, 0]] },
 ];
 
-export const BRIDGE_DECK = { beam: 14, suspension: 22 };
+// Deck heights above the sea. Tower Bridge sits lower, like the real one, so
+// the road can climb up to it from the beach within the grade limit.
+export const BRIDGE_DECK = { beam: 14, suspension: 22, tower: 9 };
 
 // Where the car starts: west end of Britain's main street, facing east,
 // in the left-hand lane (Britain drives on the left).

@@ -343,7 +343,6 @@ async function cleanScan(doc, { maxArea = Infinity, sky = false }) {
 // come with a ground sheet, or the same building twice.
 const LANDMARKS = [
   ["bigben", "clock_tower_big_ben.glb"],
-  ["towerbridge", "tower_bridge.glb"],
   ["stonehenge", "stonehenge.glb", { drop: ["Object_2"] }],
   ["eiffel", "free__la_tour_eiffel.glb"],
   ["arc", "arc_de_triumphe_paris.glb", { maxError: 0.01 }],

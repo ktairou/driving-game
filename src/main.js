@@ -386,13 +386,22 @@ async function start() {
   $("btn-action").addEventListener("click", async () => {
     if (swapping) return;
     if (mode === "drive") {
-      // Step out on the driver's side.
+      // Step out on the driver's side. If that spot is far below the car (off
+      // the edge of a bridge deck), try the other side, then right beside the
+      // car, so you never drop into the sea.
       const lx = -Math.cos(vehicle.heading);
       const lz = Math.sin(vehicle.heading);
-      const out = (car.geometry.halfWidth ?? 1) + 0.8;
-      people.player.x = vehicle.x + lx * out;
-      people.player.z = vehicle.z + lz * out;
-      people.player.y = world.getHeight(people.player.x, people.player.z);
+      const half = car.geometry.halfWidth ?? 1;
+      let px = vehicle.x, pz = vehicle.z, py = vehicle.y;
+      for (const out of [half + 0.8, -(half + 0.8), half + 0.2, -(half + 0.2)]) {
+        const x = vehicle.x + lx * out;
+        const z = vehicle.z + lz * out;
+        const y = world.getHeight(x, z);
+        if (Math.abs(y - vehicle.y) < 2) { px = x; pz = z; py = y; break; }
+      }
+      people.player.x = px;
+      people.player.z = pz;
+      people.player.y = py;
       people.player.heading = vehicle.heading;
       chase.footYaw = vehicle.heading;
       autodriver.stop();

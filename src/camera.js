@@ -178,7 +178,9 @@ export class ChaseCamera {
     const [px, pz] = road.points[ahead];
     const [tx, tz] = road.tangents[ahead];
     const side = Math.random() < 0.5 ? -1 : 1;
-    const off = 9 + Math.random() * 6;
+    // (Beside Tower Bridge, stand clear of its towers.)
+    const span = road.towerSpan;
+    const off = (span && ahead > span.i0 - 6 && ahead < span.i1 + 6 ? 18 : 9) + Math.random() * 6;
     const x = px + tz * side * off;
     const z = pz - tx * side * off;
     const y = Math.max(world.getHeight(x, z), road.heights[ahead], SEA_LEVEL) + 1.6 + Math.random() * 2.5;

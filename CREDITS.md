@@ -25,7 +25,7 @@ From [Poly Haven](https://polyhaven.com), all CC0 (public domain):
 - Walls: white_plaster_02, red_brick_03
 - Bark: bark_brown_02
 - Sand and beaches: coast_sand_01
-- Pyramids and clock tower: sandstone_blocks_04
+- Pyramids, clock tower and Tower Bridge: sandstone_blocks_04
 - Leaves: from the jacaranda_tree and fir_tree_01 models
 
 ## Made by the game itself

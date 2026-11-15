@@ -1,6 +1,8 @@
 import { clamp, lerp, smoothstep } from "../noise.js";
 import { ISLANDS, CONNECTORS, EXTRA_ROADS, ROAD_SAMPLE_STEP, BRIDGE_DECK } from "./layout.js";
 
+const TOWER_BRIDGES = ISLANDS.flatMap((isl) => isl.landmarks).filter((lm) => lm.type === "towerBridge");
+
 // Centripetal Catmull-Rom through a list of 2D points, resampled so
 // consecutive samples are `step` metres apart. `closed` joins the ends.
 export function buildCurve(points, step, closed) {
@@ -92,6 +94,39 @@ function limitGrade(h, closed, grade, pinned) {
   }
 }
 
+// Holds samples i0..i1 at one height and eases the road either side into it.
+// Each side's blend is the shortest that is nowhere steeper than half of
+// `grade` (if one up to 200 m long manages that), else than `grade` itself,
+// or than the road already was there. It starts and ends level with what it
+// joins, so there is no kink to bounce on.
+function levelSpan(h, i0, i1, height, grade) {
+  const n = h.length;
+  const orig = h.slice();
+  for (let i = i0; i <= i1; i++) h[i] = height;
+  for (const dir of [-1, 1]) {
+    const edge = dir < 0 ? i0 : i1;
+    const at = (k) => edge + dir * k;
+    // (Never reaching the ends, which join other roads at their height.)
+    const room = dir < 0 ? edge - 2 : n - 3 - edge;
+    const make = (len, maxRise) => {
+      const blend = [height];
+      for (let k = 1; k <= len + 1; k++) blend.push(lerp(height, orig[at(k)], smoothstep(0, len, k)));
+      for (let k = 1; k < blend.length; k++) if (Math.abs(blend[k] - blend[k - 1]) > Math.max(maxRise, k > 1 ? Math.abs(orig[at(k)] - orig[at(k - 1)]) : 0) + 1e-6) return null;
+      return blend;
+    };
+    let blend = null;
+    for (const [rise, longest] of [[grade / 2, 100], [grade, room]]) {
+      for (let len = 10; len <= Math.min(room, longest) && !blend; len += 5) blend = make(len, rise * ROAD_SAMPLE_STEP);
+      if (blend) break;
+    }
+    if (!blend) {
+      console.warn("road too steep beside a level span", i0, i1);
+      continue;
+    }
+    for (let k = 1; k < blend.length; k++) h[at(k)] = blend[k];
+  }
+}
+
 function tangentsOf(points, closed) {
   const n = points.length;
   return points.map((p, i) => {
@@ -156,7 +191,21 @@ export class RoadNetwork {
       limitGrade(h, false, 0.085, new Set([0, n - 1]));
       // Bridges keep their deck height over the water itself.
       for (let i = 0; i < n; i++) if (bridge[i]) h[i] = Math.max(h[i], deck * 0.6);
-      const road = this._add({ id: c.id, island: c.island ?? null, closed: false, points, heights: h, bridge, drive: c.drive, style: c.bridge ?? null, from: c.from, to: c.to });
+      // Tower Bridge: it starts a little way out from the shore at this road's
+      // start, and its deck is level from end to end.
+      let towerSpan = null;
+      const tower = TOWER_BRIDGES.find((lm) => lm.road === c.id);
+      if (tower) {
+        const shore = bridge.indexOf(true);
+        const i0 = shore + Math.round(tower.from / ROAD_SAMPLE_STEP);
+        const i1 = i0 + Math.round(tower.length / ROAD_SAMPLE_STEP);
+        if (shore < 0 || i1 >= n - 1 || bridge.slice(i0, i1 + 1).includes(false)) console.warn("Tower Bridge isn't all over water", c.id, i0, i1);
+        levelSpan(h, i0, i1, BRIDGE_DECK.tower, 0.08);
+        towerSpan = { i0, i1, height: BRIDGE_DECK.tower };
+        // Its middle, for anything that wants to know where it is.
+        [tower.x, tower.z] = points[Math.round((i0 + i1) / 2)];
+      }
+      const road = this._add({ id: c.id, island: c.island ?? null, closed: false, points, heights: h, bridge, drive: c.drive, style: c.bridge ?? null, from: c.from, to: c.to, towerSpan });
       if (startJ) this.junctions.push({ road, end: 0, other: startJ.road, at: startJ.at });
       if (endJ) this.junctions.push({ road, end: n - 1, other: endJ.road, at: endJ.at });
     }

@@ -8,15 +8,6 @@
   "tris": 38540,
   "before": 38540
  },
- "towerbridge": {
-  "size": [
-   177.88,
-   86.82,
-   383.08
-  ],
-  "tris": 84538,
-  "before": 89187
- },
  "stonehenge": {
   "size": [
    1264.55,

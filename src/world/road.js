@@ -3,6 +3,7 @@ import { GeometryBuilder, normalize, cross } from "../geom.js";
 import { surfaceMaterial, plainMaterial, rgb } from "./materials.js";
 import { TOWNS, ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./layout.js";
 import { SEA_FLOOR } from "./islands.js";
+import { buildTowerBridge } from "./towerBridge.js";
 
 const LIFT = 0.04; // road surface sits this far above the height grid
 const ASPHALT_TILE = 7; // metres per asphalt texture repeat
@@ -225,31 +226,44 @@ export function buildRoad(scene, world, colliders) {
     if (rail.vertexCount) keep(rail.toMesh(`rails_${road.id}`, scene), steel, true);
 
     // --- Bridges ---------------------------------------------------------------------
+    // Tower Bridge has its own deck, railings and piers (towerBridge.js), so the
+    // plain bridge stops at each end of it and carries on after.
+    const tower = road.towerSpan;
     for (const [r0, r1raw] of runs(n, closed, (i) => isBridge(i))) {
       // Start the structure a little before the water and end a little after.
       const b0 = Math.max(0, r0 - 6);
       const b1 = Math.min(closed ? r1raw + 6 : n - 1, r1raw + 6);
+      const pieces = tower && tower.i0 >= b0 && tower.i1 <= b1 ? [[b0, tower.i0], [tower.i1, b1]] : [[b0, b1]];
       const deck = new GeometryBuilder();
       const walls = new GeometryBuilder();
-      // Slab under the road, and parapet walls along both edges.
-      addStrip(deck, F, b0, b1, n, -hw - 0.6, hw + 0.6, -1.4, -0.05, ["bottom"]);
-      addStrip(deck, F, b0, b1, n, hw + 0.6, hw + 0.6, -1.4, 0, ["outer"]);
-      addStrip(deck, F, b0, b1, n, -hw - 0.6, -hw - 0.6, -1.4, 0, ["outer"]);
-      for (const side of [-1, 1]) {
-        const inner = side * (hw + 0.15);
-        const outer = side * (hw + 0.6);
-        addStrip(walls, F, b0, b1, n, inner, outer, -0.05, 0.95, ["inner", "top", "outer"]);
-        for (let k = b0; k < b1; k++) {
-          const a = at(F[k % n], inner);
-          const b = at(F[(k + 1) % n], inner);
-          colliders.addSegment(a[0], a[2], b[0], b[2]);
+      for (const [p0, p1] of pieces) {
+        // Slab under the road, and parapet walls along both edges.
+        addStrip(deck, F, p0, p1, n, -hw - 0.6, hw + 0.6, -1.4, -0.05, ["bottom"]);
+        addStrip(deck, F, p0, p1, n, hw + 0.6, hw + 0.6, -1.4, 0, ["outer"]);
+        addStrip(deck, F, p0, p1, n, -hw - 0.6, -hw - 0.6, -1.4, 0, ["outer"]);
+        for (const side of [-1, 1]) {
+          const inner = side * (hw + 0.15);
+          const outer = side * (hw + 0.6);
+          addStrip(walls, F, p0, p1, n, inner, outer, -0.05, 0.95, ["inner", "top", "outer"]);
+          for (let k = p0; k < p1; k++) {
+            const a = at(F[k % n], inner);
+            const b = at(F[(k + 1) % n], inner);
+            colliders.addSegment(a[0], a[2], b[0], b[2]);
+          }
+          // Where a wall stops at Tower Bridge, close its end.
+          for (const [k, dir] of [[p0, -1], [p1, 1]]) {
+            if (k === b0 || k === b1) continue;
+            const f = F[k % n];
+            const fwd = [-f.right[2] * dir, 0, f.right[0] * dir];
+            walls.addQuad(at(f, inner, -0.05), at(f, outer, -0.05), at(f, outer, 0.95), at(f, inner, 0.95), fwd, [0, 0], [0.1, 0], [0.1, 0.25], [0, 0.25]);
+          }
         }
       }
       // Piers down to the sea bed every 40 m where it's over water.
       const piers = [];
       for (let k = b0 + 10; k < b1 - 6; k += 20) {
         const f = F[k % n];
-        if (!isBridge(k)) continue;
+        if (!isBridge(k) || (tower && k > tower.i0 - 4 && k < tower.i1 + 4)) continue;
         const ground = Math.max(world.baseHeight(f.c[0], f.c[2]), SEA_FLOOR);
         const hgt = f.c[1] - 1.4 - ground;
         if (hgt < 2) continue;
@@ -264,6 +278,7 @@ export function buildRoad(scene, world, colliders) {
 
       if (road.style === "suspension") buildSuspension(scene, F, n, b0, b1, red, keep);
     }
+    if (tower) buildTowerBridge(scene, world, road, F, keep, colliders, { concrete });
   }
 
   return { meshes, casters };
