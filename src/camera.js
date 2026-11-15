@@ -1,5 +1,5 @@
 import { FreeCamera, Vector3 } from "@babylonjs/core";
-import { clamp, lerp } from "./noise.js";
+import { clamp, lerp, smoothstep } from "./noise.js";
 import { SEA_LEVEL } from "./world/layout.js";
 
 // Camera views, in the order the camera button cycles through them.
@@ -34,6 +34,14 @@ export class ChaseCamera {
     this.tv = null;
     this.footYaw = 0;
     this._first = true;
+    // Driver's head: lean (car space, metres) and a glance sideways (radians).
+    this.lean = { x: 0, z: 0 };
+    this.look = 0;
+  }
+
+  // In the driver's seat (the cockpit kit shows only then).
+  get inDriverSeat() {
+    return CAMERA_MODES[this.mode].eye === "driver";
   }
 
   // Which way the camera faces on the ground (for the on-foot joystick).
@@ -57,7 +65,7 @@ export class ChaseCamera {
     const m = CAMERA_MODES[this.mode];
     const cam = this.camera;
     cam.minZ = m.near ?? 0.1;
-    if (m.kind === "attached") this._attached(m);
+    if (m.kind === "attached") this._attached(m, dt, v);
     else if (m.kind === "tv") this._tv(dt, v);
     else this._chase(dt, m, v);
     if (m.fov) {
@@ -93,15 +101,30 @@ export class ChaseCamera {
   }
 
   // Fixed to the car: driver's seat, bonnet, bumper.
-  _attached(m) {
+  _attached(m, dt, v) {
     const body = this.car.body;
     body.computeWorldMatrix(true);
     const wm = body.getWorldMatrix();
     // (Each downloaded vehicle has its own bonnet and bumper spots.)
     const own = m.view && this.car.views?.[m.view];
-    const local = m.eye === "driver" ? this.car.eye : own ? tmp.copyFrom(own) : tmp.set(m.pos[0], m.pos[1], m.pos[2]);
+    const local = m.eye === "driver" ? tmp.copyFrom(this.car.eye) : own ? tmp.copyFrom(own) : tmp.set(m.pos[0], m.pos[1], m.pos[2]);
+    let look = 0;
+    if (m.eye === "driver") {
+      // The head moves a little: 2 to 3 cm into a turn, forward under braking
+      // (back when speeding up), and a glance into the bend (up to 12 degrees)
+      // when turning hard at low speed.
+      const k = this._first ? 1 : 1 - Math.exp(-dt * 5);
+      this.lean.x = lerp(this.lean.x, this._first ? 0 : clamp(v.accLat * 0.003, -0.03, 0.03), k);
+      this.lean.z = lerp(this.lean.z, this._first ? 0 : clamp(-v.accLong * 0.0025, -0.025, 0.025), k);
+      const steer = v.steerInput;
+      const glance = Math.sign(steer) * smoothstep(0.35, 0.9, Math.abs(steer)) * smoothstep(9, 3, v.speed) * 0.21;
+      this.look = this._first ? 0 : lerp(this.look, glance, 1 - Math.exp(-dt * 3));
+      local.x += this.lean.x;
+      local.z += this.lean.z;
+      look = this.look;
+    }
     Vector3.TransformCoordinatesToRef(local, wm, this.camera.position);
-    tmpLook.set(local.x, local.y - 0.35, local.z + 10);
+    tmpLook.set(local.x + Math.sin(look) * 10, local.y - 0.35, local.z + Math.cos(look) * 10);
     Vector3.TransformCoordinatesToRef(tmpLook, wm, this.target);
     // Keep the horizon level-ish when the car rolls, like a real head would.
     this.camera.upVector.set(0, 1, 0);

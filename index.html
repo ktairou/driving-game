@@ -51,6 +51,7 @@
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" /><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5" /></svg>
         </button>
       </div>
+      <button id="btn-photo" class="photo-open">Photo</button>
 
       <div id="steer-zone">
         <svg id="wheel" viewBox="0 0 200 200" aria-label="Steering wheel">
@@ -133,6 +134,22 @@
       </div>
 
       <div id="toast" class="toast"></div>
+    </div>
+
+    <!-- Photo mode: drag anywhere to look around; the bar is the only control. -->
+    <div id="photo" class="photo" hidden>
+      <div id="photo-msg" class="toast"></div>
+      <div class="photo-bar">
+        <div class="photo-time">
+          <span id="photo-clock" class="photo-clock">12:00</span>
+          <div id="photo-slider" class="photo-slider" role="slider" aria-label="Time of day" aria-valuemin="0" aria-valuemax="24">
+            <div class="photo-track"></div>
+            <div id="photo-knob" class="photo-knob"></div>
+          </div>
+        </div>
+        <button id="btn-photo-save" class="photo-save">Save picture</button>
+        <button id="btn-photo-done" class="photo-done">Done</button>
+      </div>
     </div>
 
     <div id="map-panel" class="panel map-panel" hidden>

@@ -1,13 +1,12 @@
-import { DynamicTexture, PBRMaterial, Texture, MeshBuilder, Mesh, Matrix, Quaternion, Vector3, Color3 } from "@babylonjs/core";
+import { PBRMaterial, MeshBuilder, Mesh, Matrix, Quaternion, Vector3, Color3 } from "@babylonjs/core";
 import { GeometryBuilder } from "../geom.js";
 import { mulberry32 } from "../noise.js";
 import { surfaceMaterial, plainMaterial, rgb } from "./materials.js";
 import { ISLANDS, ROAD_HALF_WIDTH } from "./layout.js";
+import { buildFacades, roofTileTexture, detailTexture, GROUND } from "./facades.js";
+import { buildFront, buildBack } from "./buildings.js";
+import { buildStreetFurniture } from "./streetFurniture.js";
 
-const BAY = 3.5; // metres per window bay
-const FLOOR = 3.4; // metres per storey
-const TEX_BAYS = 4; // each facade texture holds 4 bays x 2 storeys
-const TEX_FLOORS = 2;
 const SIDEWALK = 4;
 const BUILD_LINE = ROAD_HALF_WIDTH + SIDEWALK + 0.6;
 
@@ -20,189 +19,27 @@ function loadImage(src) {
   });
 }
 
-function facadeMaterial(scene, name, albedo, orm, glow) {
-  albedo.update(true);
-  orm.update(true);
-  glow.update(true);
-  for (const t of [albedo, orm, glow]) {
-    // Dynamic textures clamp by default; the facade must repeat up and along walls.
-    t.wrapU = Texture.WRAP_ADDRESSMODE;
-    t.wrapV = Texture.WRAP_ADDRESSMODE;
-    t.anisotropicFilteringLevel = 4;
-  }
-  orm.gammaSpace = false;
-  const m = new PBRMaterial(name, scene);
-  m.albedoTexture = albedo;
-  m.metallicTexture = orm;
-  m.useAmbientOcclusionFromMetallicTextureRed = true;
-  m.useRoughnessFromMetallicTextureGreen = true;
-  m.useMetallnessFromMetallicTextureBlue = true;
-  m.metallic = 1;
-  m.roughness = 1;
-  // Lit windows: switched on at night by nightlights.js.
-  m.emissiveTexture = glow;
-  m.emissiveColor = new Color3(0, 0, 0);
-  m.metadata = { windows: true };
-  return m;
+// Average colour of a photo (0..1 per channel, as stored).
+function photoAverage(img) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 8;
+  const x = c.getContext("2d");
+  x.drawImage(img, 0, 0, 8, 8);
+  const d = x.getImageData(0, 0, 8, 8).data;
+  const avg = [0, 0, 0];
+  for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) avg[k] += d[i + k] / 255 / 64;
+  return avg;
 }
 
-const WINDOW_GLOWS = ["#ffd9a0", "#ffe8c2", "#fff2dc", "#ffcf8a", "#d9e6ff"];
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 
-function glowTexture(scene, name, W, H) {
-  const t = new DynamicTexture(`${name}_glow`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const c = t.getContext();
-  c.fillStyle = "#000";
-  c.fillRect(0, 0, W, H);
-  return { t, c };
-}
-
-// Paints a facade (wall + windows) and a matching roughness map on canvases.
-// `win` sets window width and height as a share of the bay / storey.
-function paintFacade(scene, name, wallImg, wallTint, frameColor, seed, win = [0.6, 0.58]) {
-  const W = 1024;
-  const H = 512;
-  const rand = mulberry32(seed);
-  const albedo = new DynamicTexture(`${name}_albedo`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const orm = new DynamicTexture(`${name}_orm`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const a = albedo.getContext();
-  const o = orm.getContext();
-  const glow = glowTexture(scene, name, W, H);
-
-  // Wall: photo texture tiled (one tile is about 2.3 m of wall), then tinted.
-  const tile = 170;
-  for (let y = 0; y < H; y += tile) for (let x = 0; x < W; x += tile) a.drawImage(wallImg, x, y, tile, tile);
-  a.globalCompositeOperation = "multiply";
-  a.fillStyle = wallTint;
-  a.fillRect(0, 0, W, H);
-  a.globalCompositeOperation = "source-over";
-  o.fillStyle = "rgb(255, 225, 0)";
-  o.fillRect(0, 0, W, H);
-
-  const bayPx = W / TEX_BAYS;
-  const floorPx = H / TEX_FLOORS;
-  for (let f = 0; f < TEX_FLOORS; f++) {
-    a.fillStyle = "rgba(0,0,0,0.18)";
-    a.fillRect(0, f * floorPx, W, 10);
-    for (let b = 0; b < TEX_BAYS; b++) {
-      const w = bayPx * win[0];
-      const h = floorPx * win[1];
-      const x = b * bayPx + (bayPx - w) / 2;
-      const y = f * floorPx + floorPx * 0.2;
-      a.fillStyle = frameColor;
-      a.fillRect(x - 9, y - 9, w + 18, h + 18);
-      o.fillStyle = "rgb(255, 130, 0)";
-      o.fillRect(x - 9, y - 9, w + 18, h + 18);
-      const g = a.createLinearGradient(0, y, 0, y + h);
-      g.addColorStop(0, "#5d6f7d");
-      g.addColorStop(1, "#1b242c");
-      a.fillStyle = g;
-      a.fillRect(x, y, w, h);
-      o.fillStyle = "rgb(255, 18, 0)";
-      o.fillRect(x, y, w, h);
-      if (rand() < 0.5) {
-        glow.c.fillStyle = WINDOW_GLOWS[Math.floor(rand() * WINDOW_GLOWS.length)];
-        glow.c.fillRect(x, y, w, h);
-      }
-      if (rand() < 0.45) {
-        const bh = h * (0.15 + rand() * 0.6);
-        a.fillStyle = rand() < 0.5 ? "#cfc6b4" : "#8f857a";
-        a.fillRect(x, y, w, bh);
-        o.fillStyle = "rgb(255, 210, 0)";
-        o.fillRect(x, y, w, bh);
-      }
-      a.fillStyle = frameColor;
-      a.fillRect(x + w / 2 - 4, y, 8, h);
-      a.fillStyle = "rgba(235,232,225,0.95)";
-      a.fillRect(x - 14, y + h + 9, w + 28, 12);
-    }
-  }
-  return facadeMaterial(scene, name, albedo, orm, glow.t);
-}
-
-// Office-tower curtain wall: glass panels with thin metal mullions.
-function paintGlass(scene, name, glassTop, glassBottom, mullion, seed) {
-  const W = 1024;
-  const H = 512;
-  const rand = mulberry32(seed);
-  const albedo = new DynamicTexture(`${name}_albedo`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const orm = new DynamicTexture(`${name}_orm`, { width: W, height: H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
-  const a = albedo.getContext();
-  const o = orm.getContext();
-  const glow = glowTexture(scene, name, W, H);
-  const bayPx = W / TEX_BAYS;
-  const floorPx = H / TEX_FLOORS;
-  for (let f = 0; f < TEX_FLOORS; f++) {
-    for (let b = 0; b < TEX_BAYS; b++) {
-      if (rand() < 0.4) {
-        glow.c.fillStyle = rand() < 0.7 ? "#e8f0ff" : "#ffe6b8";
-        glow.c.fillRect(b * bayPx, f * floorPx, bayPx, floorPx);
-      }
-      const g = a.createLinearGradient(0, f * floorPx, 0, (f + 1) * floorPx);
-      g.addColorStop(0, glassTop);
-      g.addColorStop(1, glassBottom);
-      a.fillStyle = g;
-      a.fillRect(b * bayPx, f * floorPx, bayPx, floorPx);
-      if (rand() < 0.2) {
-        a.fillStyle = "rgba(230,225,210,0.35)";
-        a.fillRect(b * bayPx, f * floorPx + floorPx * 0.75, bayPx, floorPx * 0.25);
-      }
-    }
-  }
-  o.fillStyle = "rgb(255, 14, 40)";
-  o.fillRect(0, 0, W, H);
-  a.fillStyle = mullion;
-  o.fillStyle = "rgb(255, 90, 200)";
-  for (let b = 0; b <= TEX_BAYS; b++) {
-    a.fillRect(b * bayPx - 5, 0, 10, H);
-    o.fillRect(b * bayPx - 5, 0, 10, H);
-  }
-  for (let f = 0; f <= TEX_FLOORS; f++) {
-    a.fillRect(0, f * floorPx - 14, W, 28);
-    o.fillRect(0, f * floorPx - 14, W, 28);
-    glow.c.fillStyle = "#000";
-    glow.c.fillRect(0, f * floorPx - 14, W, 28);
-  }
-  glow.c.fillStyle = "#000";
-  for (let b = 0; b <= TEX_BAYS; b++) glow.c.fillRect(b * bayPx - 5, 0, 10, H);
-  return facadeMaterial(scene, name, albedo, orm, glow.t);
-}
-
-function addBox(g, x0, x1, z0, z1, y0, y1, ground) {
-  const walls = [
-    [[x0, z0], [x1, z0], [0, 0, -1]],
-    [[x1, z0], [x1, z1], [1, 0, 0]],
-    [[x1, z1], [x0, z1], [0, 0, 1]],
-    [[x0, z1], [x0, z0], [-1, 0, 0]],
-  ];
-  for (const [a, b, n] of walls) {
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const u1 = len / (BAY * TEX_BAYS);
-    const v0 = (y0 - ground) / (FLOOR * TEX_FLOORS);
-    const v1 = (y1 - ground) / (FLOOR * TEX_FLOORS);
-    g.addQuad([a[0], y0, a[1]], [b[0], y0, b[1]], [b[0], y1, b[1]], [a[0], y1, a[1]], n, [0, v0], [u1, v0], [u1, v1], [0, v1]);
-  }
-}
-
-function addRoof(g, x0, x1, z0, z1, y) {
-  g.addQuad([x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1], [0, 1, 0], [x0 / 6, z0 / 6], [x1 / 6, z0 / 6], [x1 / 6, z1 / 6], [x0 / 6, z1 / 6]);
-}
-
-// Sloped "mansard" roof like Paris buildings: four faces leaning inward.
-function addMansard(g, x0, x1, z0, z1, y, h, inset) {
-  const X0 = x0 + inset;
-  const X1 = x1 - inset;
-  const Z0 = z0 + inset;
-  const Z1 = z1 - inset;
-  const t = y + h;
-  const faces = [
-    [[x0, y, z0], [x1, y, z0], [X1, t, Z0], [X0, t, Z0], [0, 0.5, -1]],
-    [[x1, y, z0], [x1, y, z1], [X1, t, Z1], [X1, t, Z0], [1, 0.5, 0]],
-    [[x1, y, z1], [x0, y, z1], [X0, t, Z1], [X1, t, Z1], [0, 0.5, 1]],
-    [[x0, y, z1], [x0, y, z0], [X0, t, Z0], [X0, t, Z1], [-1, 0.5, 0]],
-  ];
-  for (const [p0, p1, p2, p3, n] of faces) g.addQuad(p0, p1, p2, p3, n, [0, 0], [3, 0], [3, 1], [0, 1]);
-  addRoof(g, X0, X1, Z0, Z1, t);
-}
+// The second row behind each main street: lot sizes and storeys by style.
+const BACK_ROW = {
+  british: { width: [7, 10], depth: [7, 9], floors: [2, 2] },
+  paris: { width: [13, 19], depth: [10, 13], floors: [3, 4] },
+  city: { width: [13, 21], depth: [11, 15], floors: [2, 4] },
+  desert: { width: [8, 12], depth: [8, 11], floors: [1, 2] },
+};
 
 const STYLES = {
   british: { floors: [2, 7], depth: [14, 26], width: [13, 29] },
@@ -212,46 +49,133 @@ const STYLES = {
 };
 
 export async function buildTown(scene, world, colliders) {
-  const [plaster, brick] = await Promise.all([loadImage("assets/textures/plaster_color.webp"), loadImage("assets/textures/brick_color.webp")]);
-  const facades = {
-    british: [
-      paintFacade(scene, "facade_cream", plaster, "#fff8ea", "#e9e6df", 1),
-      paintFacade(scene, "facade_brick", brick, "#f0e4dc", "#efece6", 2),
-      paintFacade(scene, "facade_slate", plaster, "#b9c2ca", "#2c3034", 3),
-      paintFacade(scene, "facade_sand", plaster, "#f2dcc0", "#f2efe9", 4),
-    ],
-    paris: [
-      paintFacade(scene, "facade_paris1", plaster, "#f3e7cf", "#e8e1d2", 5, [0.46, 0.66]),
-      paintFacade(scene, "facade_paris2", plaster, "#ecdcc0", "#ded7c8", 6, [0.46, 0.66]),
-    ],
-    city: [
-      paintGlass(scene, "glass_blue", "#6f8aa3", "#20303f", "#c9ced3", 7),
-      paintGlass(scene, "glass_dark", "#4b5966", "#151c23", "#8e959c", 8),
-      paintFacade(scene, "facade_office", plaster, "#cfd3d6", "#3a4046", 9, [0.78, 0.6]),
-    ],
-    desert: [
-      paintFacade(scene, "facade_mud", plaster, "#e8c99a", "#7a5a3a", 10, [0.3, 0.42]),
-      paintFacade(scene, "facade_white", plaster, "#fbf3e3", "#6b8aa0", 11, [0.3, 0.42]),
-    ],
-  };
+  const [plaster, brick, stone] = await Promise.all(["plaster", "brick", "sandstone"].map((n) => loadImage(`assets/textures/${n}_color.webp`)));
+  const facades = buildFacades(scene, { plaster, brick, stone });
   const roofMat = surfaceMaterial(scene, "roof", "pavers", { tint: rgb(0.55, 0.55, 0.56) });
-  const slate = plainMaterial(scene, "slateRoof", rgb(0.24, 0.26, 0.29), { metallic: 0.2, roughness: 0.55 });
   const paversMat = surfaceMaterial(scene, "pavers", "pavers", { tint: rgb(0.78, 0.84, 0.92) });
 
+  // Roof tiles, plain parts and small details shared by all the buildings.
+  // Colours that differ from part to part (clay or slate tiles, a white dome,
+  // a wooden tank) are vertex colours, so each material is one draw for all.
+  const tiles = new PBRMaterial("roofTiles", scene);
+  tiles.albedoTexture = roofTileTexture(scene);
+  tiles.metallic = 0;
+  tiles.roughness = 0.72;
+  const painted = plainMaterial(scene, "roofThings", rgb(1, 1, 1), { metallic: 0.25, roughness: 0.6 });
+  const details = detailTexture(scene);
+  const detailMat = (name, seeThrough) => {
+    const m = new PBRMaterial(name, scene);
+    m.albedoTexture = details;
+    m.metallic = 0;
+    m.roughness = 0.75;
+    // Awnings and signs are seen from below, railings from both sides.
+    m.backFaceCulling = false;
+    m.twoSidedLighting = true;
+    if (seeThrough) {
+      m.useAlphaFromAlbedoTexture = true;
+      m.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST;
+      m.alphaCutOff = 0.5;
+    } else m.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
+    return m;
+  };
+  const redLight = plainMaterial(scene, "mastLight", rgb(0.5, 0.04, 0.03), { roughness: 0.4 });
+  redLight.emissiveColor = new Color3(1, 0.06, 0.03); // aircraft warning light, on day and night
+  // Each entry is a material, or { mat, tint } for a vertex-coloured one.
+  const mats = {
+    flatRoof: roofMat,
+    clay: { mat: tiles, tint: [0.66, 0.33, 0.22] },
+    slate: { mat: tiles, tint: [0.3, 0.32, 0.36] },
+    zinc: { mat: tiles, tint: [0.44, 0.48, 0.53] },
+    lead: { mat: painted, tint: [0.22, 0.23, 0.25] },
+    metal: { mat: painted, tint: [0.45, 0.46, 0.47] },
+    door: { mat: painted, tint: [0.42, 0.42, 0.4] },
+    backDoor: { mat: painted, tint: [0.2, 0.15, 0.11] },
+    tank: { mat: painted, tint: [0.86, 0.86, 0.83] },
+    tankWood: { mat: painted, tint: [0.34, 0.24, 0.16] },
+    dome: { mat: painted, tint: [0.9, 0.88, 0.84] },
+    wood: { mat: painted, tint: [0.36, 0.24, 0.14] },
+    redLight,
+    details: detailMat("streetDetail", false),
+    railing: detailMat("railings", true),
+  };
+  // Plain wall to match each facade (gables, chimneys, parapets, ledges): the
+  // same photo the facade was painted from, coloured like the facade's wall.
+  const photoAvg = { plaster: photoAverage(plaster), stone: photoAverage(stone) };
+  const plainMats = {
+    plaster: surfaceMaterial(scene, "plainWall", "plaster"),
+    stone: surfaceMaterial(scene, "plainStone", "sandstone"),
+  };
+  mats.footing = { mat: plainMats.plaster, tint: [0.42, 0.4, 0.37] }; // stone base where the ground falls away
+  const plainFor = ({ set, ti }) => {
+    const kind = set.spec.wall === "stone" ? "stone" : "plaster";
+    const tint = set.tints[ti];
+    return { mat: plainMats[kind], tint: set.wallColour.map((v, k) => Math.min(1.4, (toLinear(v) / Math.max(0.05, toLinear(photoAvg[kind][k]))) * tint[k])) };
+  };
+
+  // One builder per material. Vertex colours run in stretches: each call to
+  // paint() colours everything added to that builder until the next call.
   const builders = new Map();
   const builder = (mat) => {
     if (!builders.has(mat)) builders.set(mat, new GeometryBuilder());
     return builders.get(mat);
   };
+  const fillColours = (g) => {
+    if (!g.extra) return;
+    const c = g.colour ?? [1, 1, 1];
+    while (g.extra.data.length < g.vertexCount * 4) g.extra.data.push(c[0], c[1], c[2], 1);
+  };
+  const paint = (what, tint = null) => {
+    if (what.mat) return paint(what.mat, what.tint);
+    const g = builder(what);
+    if (tint || g.extra) {
+      g.extra ??= { name: "color", stride: 4, data: [] };
+      fillColours(g);
+      g.colour = tint ?? [1, 1, 1];
+    }
+    return g;
+  };
+  // What the building shapes (buildings.js) need.
+  let shopUnits = [];
+  const ctx = {
+    g: paint,
+    mats,
+    ground: GROUND,
+    plain: plainFor,
+    glass: (rand) => ({ mat: facades.glass.mat, tint: facades.glass.tints[rand() < 0.55 ? 0 : 1] }),
+    // A facade for one building: a random picture of the style (or the given
+    // one), not the same as `avoid`, in a random colour variant.
+    pick(style, rand, avoid = null, index) {
+      const list = facades.sets[style];
+      let set = index !== undefined ? list[index] : list[Math.floor(rand() * list.length)];
+      if (index === undefined && avoid && set === avoid.set && list.length > 1) set = list[(list.indexOf(set) + 1) % list.length];
+      const ti = Math.floor(rand() * set.tints.length);
+      return { set, ti, mat: set.mat, tint: set.tints[ti] };
+    },
+    units(found, L) {
+      for (const u of found) {
+        const xa = u.wall.p[0] + u.wall.dx * u.a;
+        const xb = u.wall.p[0] + u.wall.dx * u.b;
+        shopUnits.push({ ...u, side: L.s, x0: Math.min(xa, xb), x1: Math.max(xa, xb) });
+      }
+    },
+  };
+  // Lowest ground under a lot (where a footing may be needed).
+  const lowest = (x0, x1, z0, z1) => {
+    let low = Infinity;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) low = Math.min(low, world.getHeight(x0 + ((x1 - x0) * i) / 4, z0 + ((z1 - z0) * j) / 4));
+    return low;
+  };
   const lampMatrices = [];
   const pavementSpots = [];
   const parks = [];
   const roofs = []; // tops of tall buildings, for flags
+  const streets = []; // main streets, for the things on their pavements
 
   for (const isl of ISLANDS) for (const [ti, t] of isl.towns.entries()) {
     const st = STYLES[t.style];
-    const set = facades[t.style];
     const rand = mulberry32(isl.seed * 97 + ti * 13);
+    shopUnits = [];
+    let lot = 0;
     const ground = t.height;
     const { x0: sx0, x1: sx1, z: sz } = t.street;
     const reserved = isl.landmarks.map((lm) => {
@@ -317,16 +241,61 @@ export async function buildTown(scene, world, colliders) {
         const centre = 1 - Math.min(1, Math.abs((x + xe) / 2 - (sx0 + sx1) / 2) / ((sx1 - sx0) / 2));
         const span = st.floors[1] - st.floors[0];
         const floors = Math.max(st.floors[0], Math.round(st.floors[0] + span * (t.style === "city" ? centre * centre * (0.6 + rand() * 0.4) : rand() * 0.5 + centre * 0.5)));
-        const top = ground + floors * FLOOR + 0.4;
-        const mat = set[Math.floor(rand() * set.length)];
-        addBox(builder(mat), x, xe, zA, zB, ground - 1, top, ground);
-        if (st.mansard) addMansard(builder(slate), x, xe, zA, zB, top, 4.2, 2.2);
-        else addRoof(builder(roofMat), x, xe, zA, zB, top);
-        roofs.push({ x: (x + xe) / 2, z: (zA + zB) / 2, y: top + (st.mansard ? 4.2 : 0), floors, island: isl.id });
+        // (This draw once picked the facade. It stays, so every lot after it
+        // keeps its place; the building's looks come from its own generator.)
+        rand();
+        const L = { style: t.style, x0: x, x1: xe, zN: zNear, zF: zFar, s: side, y: ground, floors, low: lowest(x, xe, zA, zB), rand: mulberry32(isl.seed * 7919 + ti * 1013 + lot++ * 37) };
+        const top = buildFront(ctx, L);
+        roofs.push({ x: top.x, z: top.z, y: top.y, floors, island: isl.id });
         colliders.addBox((x + xe) / 2, (zA + zB) / 2, (xe - x) / 2, (zB - zA) / 2);
         x = xe + 3 + rand() * 7;
       }
     }
+
+    // A sparser second row behind the first, so the town has depth from the
+    // hills: smaller, lower buildings on the flat town ground, clear of parks,
+    // landmarks (and the people strolling round them), side roads and stations.
+    {
+      const back = BACK_ROW[t.style];
+      const r2 = mulberry32(isl.seed * 53 + ti * 17 + 999);
+      const keepOut = isl.landmarks.map((lm) => {
+        const r = (lm.base ?? 30) / 2 + 30;
+        return [lm.x - r, lm.x + r, lm.z - r, lm.z + r];
+      });
+      const clear = (a0, a1, b0, b1) => {
+        if (a0 < t.cx - t.hx + 4 || a1 > t.cx + t.hx - 4 || b0 < t.cz - t.hz + 4 || b1 > t.cz + t.hz - 4) return false;
+        if (blocked(a0, a1, b0, b1) || keepOut.some(([x0, x1, z0, z1]) => a1 > x0 && a0 < x1 && b1 > z0 && b0 < z1)) return false;
+        for (const [px, pz] of [[a0, b0], [a1, b0], [a0, b1], [a1, b1], [(a0 + a1) / 2, (b0 + b1) / 2]]) {
+          if (world.getRoadDistance(px, pz) < ROAD_HALF_WIDTH + 5 || !world.isClear(px, pz)) return false;
+        }
+        return true;
+      };
+      for (const side of [-1, 1]) {
+        let x = sx0 + r2() * 12;
+        while (x < sx1) {
+          const width = back.width[0] + r2() * (back.width[1] - back.width[0]);
+          const depth = back.depth[0] + r2() * (back.depth[1] - back.depth[0]);
+          const garage = t.style === "british" && r2() < 0.3;
+          const w = garage ? 6 : width;
+          const d = garage ? 6.5 : depth;
+          const zNear = sz + side * (BUILD_LINE + st.depth[1] + 7);
+          const zFar = zNear + side * d;
+          const zA = Math.min(zNear, zFar);
+          const zB = Math.max(zNear, zFar);
+          if (r2() < 0.5 || !clear(x, x + w, zA, zB)) {
+            x += w + 4;
+            continue;
+          }
+          const floors = garage ? 1 : back.floors[0] + Math.floor(r2() * (back.floors[1] - back.floors[0] + 1));
+          const L = { style: t.style, x0: x, x1: x + w, zN: zNear, zF: zFar, s: side, y: ground, floors, garage, low: lowest(x, x + w, zA, zB), rand: mulberry32(isl.seed * 3571 + ti * 211 + lot++ * 41) };
+          const top = buildBack(ctx, L);
+          roofs.push({ x: top.x, z: top.z, y: top.y, floors, island: isl.id });
+          colliders.addBox(x + w / 2, (zA + zB) / 2, w / 2, (zB - zA) / 2);
+          x += w + 3 + r2() * 9;
+        }
+      }
+    }
+    streets.push({ style: t.style, sx0, sx1, sz, ground, units: shopUnits, crossXs, parkSide: ti % 2 === 0 ? 1 : -1, seed: isl.seed * 131 + ti * 7 });
 
     // Pavements both sides of the main street.
     const walk = builder(paversMat);
@@ -363,17 +332,24 @@ export async function buildTown(scene, world, colliders) {
     }
   }
 
+  // Things on the pavements (added to the builders, like the buildings).
+  buildStreetFurniture(scene, colliders, streets, mats, paint);
+
   const meshes = [];
   const casters = [];
   for (const [mat, g] of builders) {
+    fillColours(g);
     const m = g.toMesh(`town_${mat.name}`, scene);
     m.material = mat;
     meshes.push(m);
-    if (mat !== paversMat) casters.push(m);
+    // (Not the pavement, nor see-through railings and glass.)
+    if (mat !== paversMat && mat !== mats.railing && mat.alpha === 1) casters.push(m);
   }
 
   // --- Street lamps -------------------------------------------------------------
-  const pole = MeshBuilder.CreateCylinder("lampPole", { height: 7.6, diameterTop: 0.12, diameterBottom: 0.2, tessellation: 10 }, scene);
+  // (No caps on the pole: one end is in the pavement, the other far overhead.
+  // The triangles saved pay for the new buildings.)
+  const pole = MeshBuilder.CreateCylinder("lampPole", { height: 7.6, diameterTop: 0.12, diameterBottom: 0.2, tessellation: 8, cap: Mesh.NO_CAP }, scene);
   pole.position.y = 3.8;
   const arm = MeshBuilder.CreateBox("lampArm", { width: 0.1, height: 0.1, depth: 2.0 }, scene);
   arm.position.set(0, 7.5, 0.95);

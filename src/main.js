@@ -16,6 +16,7 @@ import { SPAWN, LANE_OFFSET } from "./world/layout.js";
 import { loadCar, loadCarLod, loadVehicle, loadVehicleLod } from "./car/carModel.js";
 import { Vehicle } from "./car/vehicle.js";
 import { CarDamage } from "./car/damage.js";
+import { Cabin } from "./car/cabin.js";
 import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
 import { planStations, buildStations, stationApproach } from "./world/stations.js";
 import { LandmarkModels } from "./world/landmarkModels.js";
@@ -34,6 +35,7 @@ import { NightLights } from "./nightlights.js";
 import { planDragStrips, buildDragStrips } from "./world/dragstrips.js";
 import { DragRace } from "./race.js";
 import { setDragStrips } from "./map.js";
+import { PhotoMode } from "./photo.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -249,6 +251,8 @@ async function start() {
     vehicle.sync();
     damage.setCar(car);
     nightLights.setCar(car);
+    // (Before the old vehicle goes: the cockpit kit hangs off its body.)
+    cabin.setCar(car);
     chase.car = car;
     chase._first = true;
     for (const m of old.shadowMeshes) csm.removeShadowCaster(m, false);
@@ -321,12 +325,27 @@ async function start() {
   autodriver.colliders = colliders;
   const mapImage = renderMapImage(world, town.parks);
   const minimap = new MiniMap($("minimap"), mapImage);
+  // The cockpit seen from the driver's seat (dials, wheel, map screen...).
+  const cabin = new Cabin(scene, { vehicle, fuel, damage, daynight, settings, minimap: minimap.canvas });
+  cabin.setCar(car);
   let guide = null; // { route, name, progress }
   let picked = null; // destination chosen on the big map
 
   // ---------- Who is where ----------
   let mode = "drive"; // or "foot"
   const playerPos = () => (mode === "drive" ? { x: vehicle.x, z: vehicle.z } : { x: people.player.x, z: people.player.z });
+
+  // ---------- Photo mode ----------
+  // The world pauses (like an open menu) and the camera circles you.
+  const photo = new PhotoMode(scene, chase, world, daynight, {
+    onLight: () => nightLights.update(daynight.night, false, playerPos(), traffic.cars),
+  });
+  $("btn-photo").addEventListener("click", () => {
+    // (Not at the pump, where the button is hidden too, mid-splash, or while
+    // another vehicle is loading.)
+    if (mode === "fuel" || vehicle.inWater || swapping) return;
+    photo.enter(mode === "foot" ? people.player : vehicle, mode === "foot" ? null : car);
+  });
 
   const input = new Input();
   const resetCar = () => {
@@ -341,13 +360,14 @@ async function start() {
     chase._first = true;
   };
   input.handlers.camera = () => {
+    if (photo.active) return;
     toast(chase.cycle());
     settings.cameraMode = chase.mode;
     saveSettings(settings);
   };
-  input.handlers.reset = () => mode === "drive" && resetCar();
+  input.handlers.reset = () => mode === "drive" && !photo.active && resetCar();
   input.handlers.any = () => {
-    if (autodriver.active && mode === "drive") {
+    if (autodriver.active && mode === "drive" && !photo.active) {
       autodriver.stop();
       $("auto-chip").hidden = true;
       toast("Self-driving off — you're driving");
@@ -741,7 +761,7 @@ async function start() {
 
   // ---------- Auto graphics: step down if the frame rate is low ----------
   const monitor = { warm: 6, time: 0, frames: 0, slow: 0 };
-  const anyPanelOpen = () => !panel.hidden || !mapPanel.hidden || !garagePanel.hidden;
+  const anyPanelOpen = () => !panel.hidden || !mapPanel.hidden || !garagePanel.hidden || photo.active;
   const stepDown = () => {
     const i = LEVELS.indexOf(level);
     if (i > 0) {
@@ -919,6 +939,25 @@ async function start() {
     .catch((err) => console.warn("People did not load", err));
   country = world.islandAt(vehicle.x, vehicle.z)?.def.name ?? null;
 
+  // The camera for what you're doing. The cockpit kit shows only while you
+  // drive in the Driver view: not on foot or at the pump, whatever the camera
+  // button last picked.
+  let cockpitHud = false;
+  const moveCamera = (dt) => {
+    if (photo.active) photo.update(dt);
+    else if (mode === "drive") chase.update(dt, vehicle);
+    else if (mode === "fuel") refuel.camera(chase.camera);
+    else chase.followPerson(dt, people.player);
+    cabin.setShown(mode === "drive" && chase.inDriverSeat && !photo.active);
+    if (cabin.shown) cabin.update(dt);
+    // With the cockpit's own dials in view, the speed panel and the Get out
+    // button move up out of their way.
+    if (cabin.kitShown !== cockpitHud) {
+      cockpitHud = cabin.kitShown;
+      $("hud").classList.toggle("hud-cockpit", cockpitHud);
+    }
+  };
+
   let fpsTimer = 0;
   let shownSpeed = -1;
   let shownLimit = -1;
@@ -930,9 +969,7 @@ async function start() {
     const paused = anyPanelOpen();
     audio.setPaused(paused);
     if (!paused) tick(dt);
-    if (mode === "drive") chase.update(dt, vehicle);
-    else if (mode === "fuel") refuel.camera(chase.camera);
-    else chase.followPerson(dt, people.player);
+    moveCamera(dt);
 
     const me = playerPos();
     const heading = mode === "drive" ? vehicle.heading : chase.yaw;
@@ -995,10 +1032,8 @@ async function start() {
     // Test hooks: run the game forward by hand (used when the tab is hidden).
     const step = (frames, dt = 1 / 60) => {
       for (let i = 0; i < frames; i++) {
-        tick(dt);
-        if (mode === "drive") chase.update(dt, vehicle);
-        else if (mode === "fuel") refuel.camera(chase.camera);
-        else chase.followPerson(dt, people.player);
+        if (!photo.active) tick(dt); // (paused, as in the render loop)
+        moveCamera(dt);
       }
       scene.render();
     };
@@ -1009,7 +1044,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, settings };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; } };
   }
 }
 

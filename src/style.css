@@ -151,6 +151,21 @@ button {
   display: none;
 }
 
+/* Driver view with a cockpit: its dials sit where the speed panel and the
+   Get out button usually are, so those move up (over the roof lining). */
+.hud-cockpit .speedo {
+  top: calc(64px + var(--safe-t));
+  bottom: auto;
+}
+
+.hud-cockpit .action {
+  bottom: calc(37% + var(--safe-b));
+}
+
+.hud-cockpit .fuel-action {
+  bottom: calc(37% + 58px + var(--safe-b));
+}
+
 .fps {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -445,6 +460,122 @@ button {
 
 .toast.show {
   opacity: 1;
+}
+
+/* ---------- Photo mode ---------- */
+/* The way in: a word button under the round ones, clear of the wheel and pedals. */
+.photo-open {
+  position: absolute;
+  top: calc(72px + var(--safe-t));
+  right: calc(14px + var(--safe-r));
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 22px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.photo-open:active {
+  background: var(--glass-strong);
+}
+
+/* Not while filling up. */
+.hud-fuel #btn-photo {
+  display: none;
+}
+
+/* The whole screen takes the drags and pinches; the bar sits on top. */
+.photo {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  touch-action: none;
+}
+
+.photo-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 20px;
+  background: var(--glass-strong);
+  white-space: nowrap;
+}
+
+.photo-time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+}
+
+.photo-clock {
+  min-width: 5ch;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Time of day: night, dawn, day, sunset, night along the track. */
+.photo-slider {
+  position: relative;
+  width: 300px;
+  height: 48px;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.photo-track {
+  position: absolute;
+  left: 15px;
+  right: 15px;
+  top: 50%;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #1d2747 0%, #1d2747 20%, #e98a5a 25%, #8cc4f0 31%, #8cc4f0 73%, #f0a35e 79%, #c8603f 82%, #1d2747 86%, #1d2747 100%);
+}
+
+.photo-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  background: #f3f5f7;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.photo-save,
+.photo-done {
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.photo-save {
+  background: #f3f5f7;
+  color: #11161d;
+}
+
+.photo-done {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.photo-save:active,
+.photo-done:active {
+  opacity: 0.7;
 }
 
 /* ---------- Panels & screens ---------- */
