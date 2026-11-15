@@ -37,10 +37,38 @@ function drawFuelBadge(c, x, y, r) {
   c.fillRect(x - r * 0.38, y - r * 0.45, r * 0.5, r * 0.9);
   c.fillRect(x + r * 0.12, y - r * 0.2, r * 0.3, r * 0.12);
 }
-// Drag strips, shown as small chequered badges on both maps.
+// Drag strips and street race start gates, shown as small chequered badges
+// on both maps (each has mapX, mapZ); speed traps as small camera badges.
 let RACES = [];
 export function setDragStrips(list) {
   RACES = list;
+}
+let STREET = [];
+export function setStreetRaces(list) {
+  STREET = list;
+}
+let TRAPS = [];
+export function setSpeedTraps(list) {
+  TRAPS = list;
+}
+
+function drawTrapBadge(c, x, y, r) {
+  c.beginPath();
+  c.arc(x, y, r, 0, Math.PI * 2);
+  c.fillStyle = "#f2b01e";
+  c.fill();
+  c.lineWidth = r * 0.22;
+  c.strokeStyle = "#15181c";
+  c.stroke();
+  // A tiny camera.
+  c.fillStyle = "#15181c";
+  c.fillRect(x - r * 0.5, y - r * 0.28, r * 0.75, r * 0.56);
+  c.beginPath();
+  c.moveTo(x + r * 0.25, y);
+  c.lineTo(x + r * 0.58, y - r * 0.26);
+  c.lineTo(x + r * 0.58, y + r * 0.26);
+  c.closePath();
+  c.fill();
 }
 
 function drawRaceBadge(c, x, y, r) {
@@ -242,6 +270,8 @@ export class MiniMap {
     drawRoute(c, route, progress);
     for (const s of FUEL) drawFuelBadge(c, ...toPx(s.x, s.z), 4.5);
     for (const s of RACES) drawRaceBadge(c, ...toPx(s.mapX, s.mapZ), 4.5);
+    for (const s of STREET) drawRaceBadge(c, ...toPx(s.mapX, s.mapZ), 4.5);
+    for (const t of TRAPS) drawTrapBadge(c, ...toPx(t.mapX, t.mapZ), 4);
     if (destination) {
       const [dx, dy] = toPx(destination.x, destination.z);
       c.beginPath();
@@ -369,6 +399,8 @@ export class BigMap {
     }
     for (const s of FUEL) drawFuelBadge(c, ...screen(s.x, s.z), 9);
     for (const s of RACES) drawRaceBadge(c, ...screen(s.mapX, s.mapZ), 9);
+    for (const s of STREET) drawRaceBadge(c, ...screen(s.mapX, s.mapZ), 9);
+    for (const t of TRAPS) drawTrapBadge(c, ...screen(t.mapX, t.mapZ), 8);
     if (this.destination) {
       const [dx, dy] = screen(this.destination.x, this.destination.z);
       drawPin(c, dx, dy, "#e2574c");

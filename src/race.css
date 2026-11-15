@@ -61,6 +61,12 @@
   font-weight: 700;
 }
 
+/* In the Driver view the speed panel sits at the top, so the race lights
+   (and the speed trap banner, below) go under it. */
+.hud-cockpit .race-hud {
+  top: calc(146px + var(--safe-t));
+}
+
 /* The start panel and the result card. */
 .race-card {
   width: min(460px, calc(100vw - 32px));
@@ -192,4 +198,60 @@
 
 .medal-dot.bronze {
   background: #c47a3a;
+}
+
+/* ---------- Speed traps (traps.js) ---------- */
+
+/* What the camera caught: under the race lights, clear of the toasts. */
+.trap-banner {
+  position: absolute;
+  top: calc(116px + var(--safe-t));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 18px;
+  border-radius: 14px;
+  background: var(--glass-strong);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none !important;
+  white-space: nowrap;
+}
+
+.trap-banner.show {
+  opacity: 1;
+}
+
+.hud-cockpit .trap-banner {
+  top: calc(206px + var(--safe-t));
+}
+
+.trap-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.trap-speed {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.trap-note {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trap-banner.best .trap-note {
+  color: var(--accent);
+}
+
+/* Which gate is next, in a street race (streetRace.js). */
+.race-gates {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
 }

@@ -29,12 +29,17 @@ import { Traffic, TRAFFIC_MIX } from "./traffic.js";
 import { People } from "./people.js";
 import { Navigator, AutoDriver } from "./navigation.js";
 import { renderMapImage, MiniMap, BigMap, PLACES, setFuelStations } from "./map.js";
-import { GARAGE, stats, applyPaint } from "./garage.js";
+import { GARAGE, stats, applyPaint, price } from "./garage.js";
+import { Credits, raceReward, trapReward, credits as creditText } from "./credits.js";
 import { DayNight, TIME_PRESETS } from "./daynight.js";
 import { NightLights } from "./nightlights.js";
 import { planDragStrips, buildDragStrips } from "./world/dragstrips.js";
 import { DragRace } from "./race.js";
-import { setDragStrips } from "./map.js";
+import { setDragStrips, setSpeedTraps, setStreetRaces } from "./map.js";
+import { planStreetRaces, buildStreetRaces } from "./world/streetRaces.js";
+import { StreetRace } from "./streetRace.js";
+import { planSpeedTraps, buildSpeedTraps } from "./world/speedtraps.js";
+import { SpeedTraps } from "./traps.js";
 import { PhotoMode } from "./photo.js";
 
 const $ = (id) => document.getElementById(id);
@@ -58,6 +63,7 @@ Object.assign(KhronosTextureContainer2.URLConfig, {
 });
 
 const settings = loadSettings();
+const credits = new Credits(settings, saveSettings);
 let level = startingLevel(settings);
 let preset = { ...PRESETS[level] };
 
@@ -121,6 +127,10 @@ async function start() {
   const stations = planStations(world);
   // ...and so are the drag strips (levelled, and kept free of trees).
   const strips = planDragStrips(world);
+  // ...and the speed traps (no trees on their poles).
+  const traps = planSpeedTraps(world);
+  // ...and the street race start gates (no trees on their posts).
+  const streetRaces = planStreetRaces(world);
   setProgress(0.22, "Laying the land and sea…");
   await nextFrame();
   buildTerrain(scene, world);
@@ -132,6 +142,8 @@ async function start() {
   const landmarks = buildLandmarks(scene, world, colliders);
   const stationParts = buildStations(scene, world, colliders, stations);
   const dragParts = buildDragStrips(scene, world, colliders, strips);
+  const trapParts = buildSpeedTraps(scene, world, colliders, traps);
+  const gateParts = buildStreetRaces(scene, world, colliders, streetRaces);
   const landmarkModels = new LandmarkModels(scene, world, colliders);
   const parks = buildParks(scene, world, colliders, town.parks, preset, town.lampGlow);
   town.lampSpots.push(...stationParts.lampSpots, ...parks.lampSpots, ...dragParts.lampSpots);
@@ -194,7 +206,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters, ...dragParts.casters]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters, ...dragParts.casters, ...trapParts.casters, ...gateParts.casters]) csm.addShadowCaster(m, false);
   // Real landmark models load as you get near them.
   landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
   landmarkModels.update(SPAWN.x, SPAWN.z);
@@ -309,12 +321,13 @@ async function start() {
         chase._first = true;
       },
       toast,
-      ready: () => mode === "drive" && !autodriver.active,
+      ready: () => mode === "drive" && !autodriver.active && !street.active,
       onStart: () => {
         autodriver.stop();
         $("auto-chip").hidden = true;
       },
       kinds: { load: trafficKind, release: releaseKinds },
+      earn: (place, lvl) => credits.earn(raceReward("drag", place, lvl)),
     },
   });
 
@@ -328,8 +341,64 @@ async function start() {
   // The cockpit seen from the driver's seat (dials, wheel, map screen...).
   const cabin = new Cabin(scene, { vehicle, fuel, damage, daynight, settings, minimap: minimap.canvas });
   cabin.setCar(car);
-  let guide = null; // { route, name, progress }
+
+  // ---------- Speed traps ----------
+  // (Only when you're driving yourself: not self-driving, not on foot.)
+  const speedTraps = new SpeedTraps({
+    traps,
+    vehicle,
+    settings,
+    save: saveSettings,
+    hooks: {
+      active: () => mode === "drive" && !autodriver.active,
+      entry: () => carEntry,
+      flash: (k) => trapParts.flash(k),
+      earn: (oldBest, newBest) => credits.earn(trapReward(oldBest, newBest)),
+    },
+  });
+  let guide = null; // { route, name, progress, x, z, race (a street race's route) }
   let picked = null; // destination chosen on the big map
+
+  // ---------- Street races ----------
+  const street = new StreetRace({
+    world,
+    navigator,
+    vehicle,
+    traffic,
+    audio,
+    fuel,
+    settings,
+    save: saveSettings,
+    parts: gateParts,
+    hooks: {
+      entry: () => carEntry,
+      place: (x, z, heading) => {
+        vehicle.place(x, z, heading);
+        chase._first = true;
+      },
+      toast,
+      ready: () => mode === "drive" && !autodriver.active && !race.active,
+      onStart: () => {
+        autodriver.stop();
+        $("auto-chip").hidden = true;
+      },
+      // The race's route shows on the little map, like a route you picked.
+      guide: (route, name) => {
+        if (route) {
+          const end = route.points[route.points.length - 1];
+          guide = { route, name, progress: 0, x: end.x, z: end.z, race: true };
+        } else if (guide?.race) guide = null;
+      },
+      kinds: { load: trafficKind, release: releaseKinds },
+      earn: (place, lvl) => credits.earn(raceReward("street", place, lvl)),
+    },
+  });
+  // Opening the map or garage, getting out, being put back on the road...
+  // ends whichever race is on.
+  const endRaces = () => {
+    race.end();
+    street.end();
+  };
 
   // ---------- Who is where ----------
   let mode = "drive"; // or "foot"
@@ -349,7 +418,7 @@ async function start() {
 
   const input = new Input();
   const resetCar = () => {
-    race.end();
+    endRaces();
     const { road: r, index } = world.network.nearest(vehicle.x, vehicle.z);
     const [x, z] = r.points[index];
     const [tx, tz] = r.tangents[index];
@@ -429,7 +498,7 @@ async function start() {
   const refuel = new Refuel(scene, world, people);
   $("btn-fuel").addEventListener("click", () => {
     const at = pumpSpotAt(stations, vehicle);
-    if (!at || mode !== "drive") return;
+    if (!at || mode !== "drive" || race.active || street.active) return;
     if (fuel.level > 0.99) {
       toast(fuel.electric ? "Already fully charged" : "Your tank is already full");
       return;
@@ -455,7 +524,7 @@ async function start() {
   $("btn-action").addEventListener("click", async () => {
     if (swapping) return;
     if (mode === "drive") {
-      race.end();
+      endRaces();
       // Step out on the driver's side. If that spot is far below the car (off
       // the edge of a bridge deck), try the other side, then right beside the
       // car, so you never drop into the sea.
@@ -539,6 +608,12 @@ async function start() {
     const where = s.name.replace("Drag strip · ", "").replace(`${country} `, "");
     PLACES.push({ name: `${where[0].toUpperCase()}${where.slice(1)} strip`, country, x: s.tx, z: s.tz, strip: s });
   }
+  // Street races: picking one drives you to its start gate.
+  setStreetRaces(streetRaces);
+  for (const r of streetRaces) PLACES.push({ name: r.name, country: r.country, x: r.tx, z: r.tz, street: r });
+  // Speed traps: picking one takes you to its line.
+  setSpeedTraps(traps);
+  for (const t of traps) PLACES.push({ name: t.name, country: world.islandById(t.island).def.name, x: t.x, z: t.z, trap: t });
   // Places, a country at a time: pick a country, then its landmarks, towns or
   // fuel stations. Starts on the country you're in.
   const COUNTRIES = world.islands.map((isl) => ({ id: isl.def.id, name: isl.def.name, x: isl.def.cx, z: isl.def.cz, flag: flagPicture(isl.def.id) }));
@@ -548,7 +623,7 @@ async function start() {
     ["fuel", "Fuel"],
     ["race", "Races"],
   ];
-  const kindOf = (p) => (p.strip ? "race" : p.station ? "fuel" : p.landmark ? "landmark" : "town");
+  const kindOf = (p) => (p.strip || p.street || p.trap ? "race" : p.station ? "fuel" : p.landmark ? "landmark" : "town");
   let placeCountry = COUNTRIES[0];
   let placeKind = "landmark";
   const button = (parent, html, onClick, on = false) => {
@@ -593,10 +668,12 @@ async function start() {
     const me = playerPos();
     for (const p of PLACES.filter((q) => q.country === placeCountry.name && kindOf(q) === placeKind)) {
       const km = Math.hypot(p.x - me.x, p.z - me.z) / 1000;
-      // (A drag strip also shows your best time there, and your best medal.)
-      const best = p.strip ? race.bestText(p.strip) : "";
-      const medal = p.strip ? settings.races[p.strip.id]?.medal : null;
-      button(list, `${p.name}<small>${km < 1 ? "Under 1 km away" : `${km.toFixed(1)} km away`}${best ? ` · ${best}` : ""}${medal ? `<i class="medal-dot ${medal}"></i>` : ""}</small>`, () => {
+      // (A drag strip also shows your best time there, and your best medal;
+      // a speed trap your best speed.)
+      const best = p.strip ? race.bestText(p.strip) : p.street ? street.bestText(p.street) : p.trap ? speedTraps.bestText(p.trap) : "";
+      const medal = p.strip || p.street ? settings.races[(p.strip ?? p.street).id]?.medal : null;
+      const what = p.street ? `Street race, ${(p.street.length / 1000).toFixed(1)} km · ` : "";
+      button(list, `${p.name}<small>${what}${km < 1 ? "Under 1 km away" : `${km.toFixed(1)} km away`}${best ? ` · ${best}` : ""}${medal ? `<i class="medal-dot ${medal}"></i>` : ""}</small>`, () => {
         pickDestination(p.x, p.z, p.station?.name ?? p.strip?.name ?? p.name, p.station ?? null);
         bigmap.centreOn(p.x, p.z);
       });
@@ -604,7 +681,7 @@ async function start() {
   };
   renderPlaces();
   $("minimap").addEventListener("click", () => {
-    race.end();
+    endRaces();
     mapPanel.hidden = false;
     // Start on the country you're in (on a bridge, keep the last one).
     const here = playerPos();
@@ -655,8 +732,53 @@ async function start() {
   });
 
   // ---------- Garage ----------
+  // Locked vehicles show their price and a lock; tapping one asks before
+  // buying it with credits. The one you're driving is never locked.
   const garagePanel = $("garage-panel");
+  const LOCK = `<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>`;
+  const drive = async (g, card) => {
+    if (swapping || g === carEntry) return;
+    swapping = true;
+    card?.classList.add("loading");
+    try {
+      await swapCar(g);
+      fuel.level = 1;
+      settings.car = g.id;
+      saveSettings(settings);
+    } catch (err) {
+      console.warn("couldn't load", g.id, err);
+      toast("Couldn't load that one — try again");
+    } finally {
+      swapping = false;
+      renderGarage();
+    }
+  };
+  const buyPanel = $("buy-panel");
+  let buying = null;
+  const askToBuy = (g) => {
+    const cost = price(g);
+    const have = credits.balance;
+    const afford = have >= cost;
+    buying = afford ? g : null;
+    $("buy-title").textContent = afford ? `Buy the ${g.name}?` : "Not enough credits yet";
+    $("buy-text").textContent = afford
+      ? `It costs ${creditText(cost)} credits. You have ${creditText(have)}, so ${creditText(have - cost)} will be left.`
+      : `The ${g.name} costs ${creditText(cost)} credits. You have ${creditText(have)}, so you need ${creditText(cost - have)} more. Win races and beat your speed trap bests to earn them.`;
+    $("btn-buy").hidden = !afford;
+    $("btn-buy-cancel").textContent = afford ? "Not now" : "OK";
+    buyPanel.querySelector(".buy-buttons").classList.toggle("one", !afford);
+    buyPanel.hidden = false;
+  };
+  $("btn-buy-cancel").addEventListener("click", () => (buyPanel.hidden = true));
+  $("btn-buy").addEventListener("click", () => {
+    const g = buying;
+    buyPanel.hidden = true;
+    if (!g || !credits.buy(g)) return;
+    toast(`You bought the ${g.name}`);
+    drive(g, null);
+  });
   const renderGarage = () => {
+    $("garage-credits").textContent = `${creditText(credits.balance)} credits`;
     const list = $("garage-list");
     list.innerHTML = "";
     let lastKind = null;
@@ -669,35 +791,21 @@ async function start() {
         list.appendChild(head);
       }
       const s = stats(g);
+      const locked = g !== carEntry && !credits.owns(g);
       const card = document.createElement("button");
-      card.className = "car-card" + (g === carEntry ? " on" : "");
+      card.className = "car-card" + (g === carEntry ? " on" : "") + (locked ? " locked" : "");
       card.innerHTML = `
         <img class="thumb" src="assets/vehicles/thumbs/${g.model ?? "concept"}.webp" alt="" loading="lazy">
         <div class="name">${g.name}</div>
         <div class="trim">${g.trim} · ${g.electric ? "Electric" : "Petrol"}</div>
-        ${["speed", "acceleration", "grip"].map((k) => `<div class="stat">${k[0].toUpperCase() + k.slice(1)}<span class="bar"><i style="width:${Math.round(s[k] * 100)}%"></i></span></div>`).join("")}`;
-      card.addEventListener("click", async () => {
-        if (swapping || g === carEntry) return;
-        swapping = true;
-        card.classList.add("loading");
-        try {
-          await swapCar(g);
-          fuel.level = 1;
-          settings.car = g.id;
-          saveSettings(settings);
-        } catch (err) {
-          console.warn("couldn't load", g.id, err);
-          toast("Couldn't load that one — try again");
-        } finally {
-          swapping = false;
-          renderGarage();
-        }
-      });
+        ${["speed", "acceleration", "grip"].map((k) => `<div class="stat">${k[0].toUpperCase() + k.slice(1)}<span class="bar"><i style="width:${Math.round(s[k] * 100)}%"></i></span></div>`).join("")}
+        ${locked ? `<div class="price">${LOCK}${creditText(price(g))} credits</div>` : ""}`;
+      card.addEventListener("click", () => (locked ? askToBuy(g) : drive(g, card)));
       list.appendChild(card);
     }
   };
   $("btn-garage").addEventListener("click", () => {
-    race.end();
+    endRaces();
     renderGarage();
     garagePanel.hidden = false;
   });
@@ -721,6 +829,7 @@ async function start() {
     markSeg("seg-fuel", settings.fuelMode);
     markSeg("seg-fps", settings.showFps ? "on" : "off");
     markSeg("seg-sound", settings.sound ? "on" : "off");
+    markSeg("seg-unlock", settings.unlockAll ? "on" : "off");
     markSeg("seg-weather", weather.mode);
     $("graphics-note").textContent =
       settings.graphics === "auto" ? `Auto picked ${levelName(level)} for this device.` : "Changing this restarts the game.";
@@ -753,6 +862,7 @@ async function start() {
   });
   onSeg("seg-fps", (v) => (settings.showFps = v === "on"));
   onSeg("seg-sound", (v) => setSound(v === "on"));
+  onSeg("seg-unlock", (v) => (settings.unlockAll = v === "on"));
   onSeg("seg-weather", (v) => {
     weather.set(v);
     settings.weather = v;
@@ -822,7 +932,8 @@ async function start() {
     const dynamicCars = traffic.colliders();
     if (mode === "drive") {
       let controls = input;
-      if (race.active) controls = race.controls(input);
+      const racing = race.active ? race : street.active ? street : null;
+      if (racing) controls = racing.controls(input);
       else if (autodriver.active) {
         controls = autodriver.drive(vehicle, traffic, dt);
         if (autodriver.arrived) {
@@ -851,6 +962,8 @@ async function start() {
     }
     const me = playerPos();
     race.update(dt);
+    street.update(dt);
+    speedTraps.update(dt);
     traffic.update(dt, mode === "foot" ? people.player : vehicle, chase.camera);
     const fuelWarning = fuel.update(dt, vehicle, mode === "drive");
     if (fuelWarning) toast(fuelWarning);
@@ -916,7 +1029,8 @@ async function start() {
           }
         }
         guide.progress = best;
-        if (Math.hypot(guide.x - me.x, guide.z - me.z) < 15) {
+        // (A street race says when you're over the line itself.)
+        if (!guide.race && Math.hypot(guide.x - me.x, guide.z - me.z) < 15) {
           toast(`You've arrived at ${guide.name}`);
           guide = null;
         }
@@ -1007,7 +1121,7 @@ async function start() {
     }
     if (mode === "fuel") $("fuel-text").textContent = refuel.status;
     const fuelBtn = $("btn-fuel");
-    fuelBtn.hidden = !(mode === "drive" && vehicle.speed < 0.8 && !autodriver.active && pumpSpotAt(stations, vehicle));
+    fuelBtn.hidden = !(mode === "drive" && vehicle.speed < 0.8 && !autodriver.active && !race.active && !street.active && pumpSpotAt(stations, vehicle));
     if (!fuelBtn.hidden) fuelBtn.textContent = fuel.electric ? "Charge" : "Fill up";
     // Get out (when stopped) / Get in (next to a car).
     const action = $("btn-action");
@@ -1044,7 +1158,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, speedTraps, trapParts, street, streetRaces, gateParts, credits, settings, GARAGE, swapCar, cabin, photo, get car() { return car; } };
   }
 }
 
