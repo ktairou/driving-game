@@ -18,9 +18,9 @@ const xs = (a, b, n) => Array.from({ length: n }, (_, i) => a + ((b - a) * i) / 
 // Three kinds of cockpit. Distances are metres ahead of the eye.
 //   wheelR: steering wheel radius   column: its tilt from upright (degrees)
 const SHAPES = {
-  car: { wheelR: 0.185, column: 24, wheelD: 0.42, lip: 0.6, clusterW: 0.27, screenW: 0.19, mirrorW: 0.19, visorW: 0.38, console: 0.11 },
-  van: { wheelR: 0.205, column: 34, wheelD: 0.44, lip: 0.62, clusterW: 0.29, screenW: 0.21, mirrorW: 0.21, visorW: 0.42, console: 0.13 },
-  bus: { wheelR: 0.26, column: 58, wheelD: 0.47, lip: 0.76, clusterW: 0.34, screenW: 0.24, mirrorW: 0.24, visorW: 0.5, console: 0 },
+  car: { wheelR: 0.185, column: 24, wheelD: 0.42, lip: 0.6, clusterW: 0.27, screenW: 0.15, mirrorW: 0.19, visorW: 0.38, console: 0.11 },
+  van: { wheelR: 0.205, column: 34, wheelD: 0.44, lip: 0.62, clusterW: 0.29, screenW: 0.17, mirrorW: 0.21, visorW: 0.42, console: 0.13 },
+  bus: { wheelR: 0.26, column: 58, wheelD: 0.47, lip: 0.76, clusterW: 0.34, screenW: 0.19, mirrorW: 0.24, visorW: 0.5, console: 0 },
 };
 
 // Colours (linear) of the parts: dark and matt, so nothing glares.
@@ -597,18 +597,25 @@ export class Cabin {
     const yW = ey - tanD(aF - 0.5) * (dW + R * Math.sin(col)) - R * Math.cos(col);
     this._wheel([ex, yW, ez + dW], R, col);
 
-    // Centre screen (the map), standing proud of the dash like a tablet.
+    // Centre screen (the map), standing on top of the dash like the floating
+    // screens in modern cars. (Lower down, in the dash face, it would sit
+    // behind the on-screen pedals on a touch screen.)
     const ws = P.screenW;
     const hs = ws / 1.6;
-    const sY = yL - 0.05 - hs / 2;
-    // (Just right of the dials rather than dead centre, so it stays in view.)
-    const sX = Math.min(0, hx[1] + 0.04 + ws / 2);
-    const S = [sX, sY, faceZ(sY) - 0.045];
+    const sX = Math.min(0, hx[1] + 0.03 + ws / 2);
+    const zS = zL + 0.06;
+    const dashTop = yL + (fy - yL) * clamp((zS - zL) / Math.max(fz - zL, 0.01), 0, 1);
+    const sBot = dashTop + 0.025;
+    const S = [sX, sBot + hs / 2, zS];
     const nS = normalize(sub(E, S));
     this._panel("cabinScreen", S, nS, ws, hs, this.screenMat);
     kit.box(add(S, scale(nS, -0.012)), scale(rightOf(nS), ws / 2 + 0.012), scale(upOf(nS), hs / 2 + 0.012), scale(nS, 0.011), VENT);
+    // Its stand, down to the dash.
+    kit.box([sX, (dashTop + sBot) / 2, zS + 0.03], [0.03, 0, 0], [0, (sBot - dashTop) / 2 + 0.01, 0], [0, 0, 0.012], VENT);
 
-    // Air vents: either side of the screen and at each end of the dash.
+    // Air vents: in the dash face below either side of the screen, and at each
+    // end of the dash. (sY is the middle of that band; the console starts below.)
+    const sY = yL - 0.05 - hs / 2;
     const vent = (x, y, w, h) => {
       const zt = faceZ(y + h / 2) - 0.004;
       const zb = faceZ(y - h / 2) - 0.004;
