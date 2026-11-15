@@ -3,6 +3,7 @@ import { GeometryBuilder, normalize, cross, add, sub, scale } from "../geom.js";
 import { mulberry32, createNoise2D, fbm, smoothstep } from "../noise.js";
 import { loadTexture, surfaceMaterial, rgb } from "./materials.js";
 import { inTown } from "./road.js";
+import { WindSway } from "./wind.js";
 import { ROAD_HALF_WIDTH, ISLANDS } from "./layout.js";
 
 const SECTOR = 900; // trees are grouped in 900 m squares so off-screen groups are skipped
@@ -216,7 +217,10 @@ export function buildNature(scene, world, colliders, quality, extraTrees = []) {
   }
 
   // --- Materials ---------------------------------------------------------------
-  const leafMat = (name, file) => {
+  // The leaves sway in the wind (wind.js), more the higher up they are; the
+  // trunks stay put. `sway`: how far (m) the top of the crown moves at
+  // strength 1, and how high (m, before each tree's own scale) the top is.
+  const leafMat = (name, file, sway) => {
     const m = new PBRMaterial(name, scene);
     m.albedoTexture = loadTexture(scene, file, { hasAlpha: true });
     m.useAlphaFromAlbedoTexture = true;
@@ -226,10 +230,11 @@ export function buildNature(scene, world, colliders, quality, extraTrees = []) {
     m.metallic = 0;
     m.roughness = 0.75;
     m.albedoColor = rgb(1.0, 1.0, 1.0);
+    new WindSway(m, sway);
     return m;
   };
-  const broadLeaves = leafMat("leavesBroad", "leaves_broad");
-  const firLeaves = leafMat("leavesFir", "leaves_fir");
+  const broadLeaves = leafMat("leavesBroad", "leaves_broad", { reach: 9, bend: 0.3 });
+  const firLeaves = leafMat("leavesFir", "leaves_fir", { reach: 11.5, bend: 0.32 });
   const bark = surfaceMaterial(scene, "bark", "bark", { bump: 0.8 });
   bark.albedoTexture.vScale = 3;
   bark.bumpTexture.vScale = 3;

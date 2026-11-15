@@ -3,7 +3,7 @@ import { PRESETS, LEVELS, loadSettings, saveSettings, startingLevel } from "./qu
 import { setupSky, createShadows } from "./sky.js";
 import { World } from "./world/world.js";
 import { Colliders } from "./world/colliders.js";
-import { buildTerrain } from "./world/terrain.js";
+import { buildTerrain, weatherFx } from "./world/terrain.js";
 import { buildRoad } from "./world/road.js";
 import { buildTown } from "./world/town.js";
 import { buildLandmarks } from "./world/landmarks.js";
@@ -17,11 +17,13 @@ import { loadCar, loadCarLod, loadVehicle, loadVehicleLod } from "./car/carModel
 import { Vehicle } from "./car/vehicle.js";
 import { CarDamage } from "./car/damage.js";
 import { Cabin } from "./car/cabin.js";
+import { CarFx, fxKind } from "./car/carFx.js";
+import { TyreFx } from "./car/tyres.js";
 import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
 import { planStations, buildStations, stationApproach } from "./world/stations.js";
 import { LandmarkModels } from "./world/landmarkModels.js";
 import { Fuel, Refuel, pumpSpotAt, FUEL_FLOOR } from "./fuel.js";
-import { ChaseCamera } from "./camera.js";
+import { ChaseCamera, EdgeBlur } from "./camera.js";
 import { Input } from "./input.js";
 import { Weather, WEATHERS } from "./weather.js";
 import { GameAudio } from "./audio.js";
@@ -184,8 +186,18 @@ async function start() {
     }),
   );
   const lights = new TrafficLights(scene, world, colliders);
-  const traffic = new Traffic(scene, world, [{ id: "gt", mesh: lod, length: 4.6, halfWidth: 1.0, weight: 1, parked: true, coloured: true }, ...kinds.filter(Boolean)], preset);
+  const traffic = new Traffic(scene, world, [{ id: "gt", mesh: lod, length: 4.6, halfWidth: 1.0, weight: 1, parked: true, coloured: true, tailLamps: lod.metadata?.tailLamps }, ...kinds.filter(Boolean)], preset);
   traffic.lights = lights;
+  // Brake lights and a soft shadow under every vehicle (yours is the extra one).
+  const carFx = new CarFx(scene, traffic.maxInstances + 1);
+  traffic.fx = carFx;
+  // (The concept car's own lamps light up, so it needs no added glow.)
+  const playerKind = (c) => {
+    const g = c.geometry;
+    return fxKind({ lamps: c.tailLamps ?? [], length: g.length ?? 4.6, halfWidth: g.halfWidth ?? 1, centreZ: g.front !== undefined ? (g.front + g.rear) / 2 : 0 });
+  };
+  let playerFx = playerKind(car);
+  const tyres = new TyreFx(scene, world, preset.smoke);
   const people = new People(scene, world, town.pavementSpots, preset, false);
 
   const chase = new ChaseCamera(scene, world, car, settings.cameraMode);
@@ -228,6 +240,9 @@ async function start() {
     csm.shadowMaxZ = preset.shadowMaxZ;
   };
   applyEffects();
+  // At speed the screen's edges blur a little (High only). Made after the
+  // effects above, so it comes last, after the colour grading.
+  let edgeBlur = preset.edgeBlur ? new EdgeBlur(chase.camera) : null;
 
   // ---------- Weather and sound ----------
   const findMats = (re) => scene.materials.filter((m) => re.test(m.name));
@@ -249,8 +264,10 @@ async function start() {
     applyPaint(car, paint);
     vehicle.setCar(car, entry.spec);
     vehicle.sync();
+    playerFx = playerKind(car);
     damage.setCar(car);
     nightLights.setCar(car);
+    audio.setEngine(entry.sound);
     // (Before the old vehicle goes: the cockpit kit hangs off its body.)
     cabin.setCar(car);
     chase.car = car;
@@ -276,6 +293,7 @@ async function start() {
   let swapping = false;
   const audio = new GameAudio();
   audio.enabled = settings.sound;
+  audio.setEngine(carEntry.sound);
   document.addEventListener("pointerdown", () => audio.start(), true);
   document.addEventListener("keydown", () => audio.start(), true);
 
@@ -382,6 +400,8 @@ async function start() {
     gas: $("btn-gas"),
     brake: $("btn-brake"),
     reverse: $("btn-reverse"),
+    horn: $("btn-horn"),
+    look: $("btn-look"),
   });
   $("btn-camera").addEventListener("click", () => input.handlers.camera());
   $("btn-reset").addEventListener("click", () => mode === "drive" && resetCar());
@@ -768,6 +788,11 @@ async function start() {
       level = LEVELS[i - 1];
       preset = { ...PRESETS[level], trees: preset.trees, rocks: preset.rocks };
       cover.setEnabled(level !== "low");
+      // (Off before the effects are rebuilt, which would put it first in line.)
+      if (edgeBlur && !preset.edgeBlur) {
+        edgeBlur.dispose();
+        edgeBlur = null;
+      }
       applyScale();
       applyEffects();
       chase.camera.maxZ = preset.viewDistance;
@@ -817,11 +842,24 @@ async function start() {
     if (o.car && o.car.moving && speed > 1) o.car.stopTimer = 3;
   };
 
+  let hornTimer = 0;
   const tick = (dt) => {
     input.update();
+    // Horn: people ahead step aside and the car in front pulls over (again
+    // every so often while it's held).
+    const hooting = mode === "drive" && input.horn;
+    hornTimer = hooting ? hornTimer - dt : 0;
+    if (hooting && hornTimer <= 0) {
+      hornTimer = 1.2;
+      people.honk(vehicle.x, vehicle.z, Math.sin(vehicle.heading), Math.cos(vehicle.heading));
+      traffic.honk(vehicle.x, vehicle.z, vehicle.heading);
+    }
+    audio.setHorn(hooting);
+    chase.lookBack = mode === "drive" && input.lookBack;
     const dynamicCars = traffic.colliders();
+    let controls = IDLE;
     if (mode === "drive") {
-      let controls = input;
+      controls = input;
       if (race.active) controls = race.controls(input);
       else if (autodriver.active) {
         controls = autodriver.drive(vehicle, traffic, dt);
@@ -851,7 +889,15 @@ async function start() {
     }
     const me = playerPos();
     race.update(dt);
+    // Brake lights: the brake pedal, or Reverse or Gas stopping the car
+    // rolling the other way (whoever is driving: you or the self-driving).
+    const fwd = vehicle.forwardSpeed;
+    const braking = mode === "drive" && (controls.brake > 0 || (controls.reverse > 0 && fwd > 0.8) || (controls.throttle > 0 && fwd < -0.8));
+    carFx.begin();
     traffic.update(dt, mode === "foot" ? people.player : vehicle, chase.camera);
+    carFx.add(car.root.computeWorldMatrix(true), playerFx, braking, car.body.computeWorldMatrix(true));
+    carFx.end(daynight.night);
+    tyres.update(dt, vehicle, 1 - 0.8 * daynight.night, weatherFx.x, mode === "drive");
     const fuelWarning = fuel.update(dt, vehicle, mode === "drive");
     if (fuelWarning) toast(fuelWarning);
     people.update(dt, mode === "drive" ? vehicle : null);
@@ -863,7 +909,7 @@ async function start() {
     if (mode === "drive" && lights.ranRed(vehicle.x, vehicle.z, vehicle.vx, vehicle.vz)) toast("You went through a red light!");
     daynight.update(dt);
     damage.update(dt, vehicle, daynight.night);
-    nightLights.update(daynight.night, mode === "drive" && vehicle.forwardSpeed > 0.5 && (autodriver.active ? false : input.brake > 0), me, traffic.cars);
+    nightLights.update(daynight.night, braking, me, traffic.cars);
     landmarkTimer -= dt;
     if (landmarkTimer <= 0) {
       landmarkTimer = 1;
@@ -948,14 +994,18 @@ async function start() {
     else if (mode === "drive") chase.update(dt, vehicle);
     else if (mode === "fuel") refuel.camera(chase.camera);
     else chase.followPerson(dt, people.player);
-    cabin.setShown(mode === "drive" && chase.inDriverSeat && !photo.active);
+    // (Hidden while you look behind, as the head turns away from it.)
+    const inSeat = mode === "drive" && chase.inDriverSeat;
+    cabin.setShown(inSeat && !chase.lookingBack && !photo.active);
     if (cabin.shown) cabin.update(dt);
     // With the cockpit's own dials in view, the speed panel and the Get out
-    // button move up out of their way.
-    if (cabin.kitShown !== cockpitHud) {
-      cockpitHud = cabin.kitShown;
+    // button move up out of their way (and stay there while you look behind).
+    const kit = inSeat && !!car.cockpit;
+    if (kit !== cockpitHud) {
+      cockpitHud = kit;
       $("hud").classList.toggle("hud-cockpit", cockpitHud);
     }
+    edgeBlur?.update(mode === "drive" ? vehicle.speed : 0);
   };
 
   let fpsTimer = 0;
@@ -1044,7 +1094,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
   }
 }
 

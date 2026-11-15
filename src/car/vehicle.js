@@ -1,5 +1,5 @@
 import { Quaternion } from "@babylonjs/core";
-import { clamp, lerp } from "../noise.js";
+import { clamp, lerp, smoothstep } from "../noise.js";
 import { WHEEL_RADIUS } from "./carModel.js";
 import { WORLD_LIMIT, SEA_LEVEL } from "../world/layout.js";
 
@@ -17,6 +17,10 @@ export class Vehicle {
     this.rpm = 900;
     this.gear = 1;
     this.slip = 0; // how hard the tyres are sliding, for the squeal sound
+    // How hard each tyre scrubs, 0..1 (front left, front right, rear left,
+    // rear right): sliding, locking or spinning. For smoke and skid marks.
+    this.wheelSlip = [0, 0, 0, 0];
+    this.scrub = 0; // the most of those
     this.throttle = 0;
     this.dynamic = []; // moving things to bump into, refreshed every frame
     this.onBump = null;
@@ -222,6 +226,8 @@ export class Vehicle {
     let fLat = 0;
     let torque = 0;
     let slipAmount = 0;
+    let scrubF = 0;
+    let scrubR = 0;
     if (this.grounded) {
       const weight = this.mass * G;
       const transfer = (this.cgHeight / this.L) * this.mass * this.accLong;
@@ -240,8 +246,23 @@ export class Vehicle {
       if (vLong > 0) fLong += -fyF * Math.sin(this.steer) * (1 - lowSpeed);
       torque = this.a * fyF * Math.cos(this.steer) - this.b * fyR;
       slipAmount = speed > 3 ? Math.max(Math.abs(slipF), Math.abs(slipR)) + (handbrake ? 0.15 : 0) + (brake > 0 && speed > 12 ? 0.05 : 0) : 0;
+
+      // How hard the tyres scrub, for smoke and skid marks (only read: none of
+      // this changes how the car moves). Sideways slides; braking hard from
+      // speed (over about 60 km/h, more so where the brakes are strong for
+      // the grip, or the road is slippery); the handbrake; and wheelspin as a
+      // very powerful car pulls away (most cars only in the wet).
+      const fast = smoothstep(3, 8, speed);
+      const lock = clamp(((clamp(brake, 0, 1) * this.brakeForce) / (this.mass * G * this.grip) - 0.8) * 4, 0, 1) * smoothstep(16, 26, speed);
+      const spin = drive > 0 ? throttle * smoothstep(0.62, 0.8, this.maxDrive / (this.mass * G * this.grip)) * (1 - smoothstep(3, 16, vLong)) : 0;
+      scrubF = Math.max(smoothstep(0.1, 0.3, Math.abs(slipF)) * fast, lock);
+      scrubR = Math.max(smoothstep(0.1, 0.3, Math.abs(slipR)) * fast, lock, handbrake && speed > 2 ? 1 : 0, spin);
     }
     this.slip = lerp(this.slip, slipAmount, 0.2);
+    const ws = this.wheelSlip;
+    ws[0] = ws[1] = lerp(ws[0], scrubF, 0.15);
+    ws[2] = ws[3] = lerp(ws[2], scrubR, 0.15);
+    this.scrub = Math.max(ws[0], ws[2]);
 
     const aLong = fLong / this.mass;
     const aLat = fLat / this.mass;

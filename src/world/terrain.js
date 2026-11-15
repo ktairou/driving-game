@@ -1,4 +1,4 @@
-import { Vector2, MeshBuilder, PBRMaterial, DynamicTexture, Texture, Color3, VertexBuffer } from "@babylonjs/core";
+import { Vector2, Vector4, Matrix, MeshBuilder, DynamicTexture, RawTexture, Engine, Texture, Color3, VertexBuffer } from "@babylonjs/core";
 import { PBRCustomMaterial } from "@babylonjs/materials/custom/pbrCustomMaterial";
 import { GeometryBuilder } from "../geom.js";
 import { fbm, smoothstep, clamp } from "../noise.js";
@@ -294,24 +294,114 @@ function waterNormals(scene) {
   return t;
 }
 
-function buildSea(scene) {
+// The ground height along the coasts, for the sea's foam and shallows. One
+// small picture holds all four countries, one in each colour channel (512 px
+// across a country: about 4 to 5 m a pixel), from 6 m under the water to 3 m
+// above it. `rects` says where each country's square is: a column each of
+// (west edge, south edge, 1 / width, unused).
+const SHORE = 512;
+const SHORE_LOW = -6;
+const SHORE_HIGH = 3;
+function shoreMap(scene, world) {
+  const data = new Uint8Array(SHORE * SHORE * 4);
+  const rects = Matrix.Zero();
+  world.islands.slice(0, 4).forEach((isl, c) => {
+    const size = 2 * isl.def.half;
+    for (let j = 0; j < SHORE; j++) {
+      const z = isl.minZ + ((j + 0.5) / SHORE) * size;
+      for (let i = 0; i < SHORE; i++) {
+        const h = isl.getHeight(isl.minX + ((i + 0.5) / SHORE) * size, z);
+        data[(j * SHORE + i) * 4 + c] = byte((h - SHORE_LOW) / (SHORE_HIGH - SHORE_LOW));
+      }
+    }
+    rects.m[c * 4] = isl.minX;
+    rects.m[c * 4 + 1] = isl.minZ;
+    rects.m[c * 4 + 2] = 1 / size;
+    rects.m[c * 4 + 3] = 1;
+  });
+  const tex = new RawTexture(data, SHORE, SHORE, Engine.TEXTUREFORMAT_RGBA, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  tex.name = "shoreHeights";
+  tex.wrapU = tex.wrapV = Texture.CLAMP_ADDRESSMODE;
+  return { tex, rects };
+}
+
+function buildSea(scene, world) {
   const sea = MeshBuilder.CreateGround("sea", { width: 9000, height: 9000, subdivisions: 1 }, scene);
   sea.position.y = SEA_LEVEL;
-  const m = new PBRMaterial("seaMat", scene);
+  const m = new PBRCustomMaterial("seaMat", scene);
   m.albedoColor = new Color3(0.015, 0.07, 0.09);
   m.metallic = 0;
   m.roughness = 0.06;
   m.bumpTexture = waterNormals(scene);
   m.bumpTexture.uScale = m.bumpTexture.vScale = 9000 / 26;
   m.bumpTexture.level = 0.45;
+
+  // Foam where the water meets the land, lighter water over the shallows, and
+  // the hazy sky colour mixed in where you look across the water at a low
+  // angle. All in the sea's own shader: no extra pass.
+  const shore = shoreMap(scene, world);
+  const seaTime = new Vector4(0, 0, 0, 0);
+  m.AddUniform("shoreSampler", "sampler2D", shore.tex);
+  m.AddUniform("shoreRects", "mat4", shore.rects);
+  m.AddUniform("seaTime", "vec4", seaTime);
+  // (The fog colour object itself, so it follows the time of day and weather.)
+  m.AddUniform("seaSky", "vec3", scene.fogColor);
+  m.Fragment_Definitions(`
+    // Foam (0..1) here; set while working out the colour, read again for the shine.
+    float seaFoam = 0.0;
+    // Ground height under the water, from the coast picture (deep sea between countries).
+    float seaGround(vec2 p) {
+      vec2 uv = vec2(-1.0);
+      vec4 pick = vec4(0.0);
+      for (int i = 0; i < 4; i++) {
+        vec2 u = (p - shoreRects[i].xy) * shoreRects[i].z;
+        if (shoreRects[i].w > 0.0 && u.x > 0.0 && u.y > 0.0 && u.x < 1.0 && u.y < 1.0) {
+          uv = u;
+          pick = vec4(equal(ivec4(i), ivec4(0, 1, 2, 3)));
+        }
+      }
+      if (uv.x < 0.0) return ${SHORE_LOW.toFixed(1)};
+      return mix(${SHORE_LOW.toFixed(1)}, ${SHORE_HIGH.toFixed(1)}, dot(texture2D(shoreSampler, uv), pick));
+    }
+  `);
+  m.Fragment_Custom_Albedo(`
+    float seaDepth = -seaGround(vPositionW.xz);
+    // Shallows: lighter and greener over the sand near the beach.
+    surfaceAlbedo = mix(vec3(0.05, 0.15, 0.13), surfaceAlbedo, smoothstep(0.2, 5.0, seaDepth));
+    // Foam: a band along the water's edge that washes in towards the beach,
+    // broken up by the ripples (close up only; far off, a soft pale line).
+    // Only worked out near the edge: none of it reaches deeper water, and
+    // most of the sea on screen is deep.
+    if (seaDepth < 1.5) {
+      float seaFar = smoothstep(250.0, 700.0, distance(vPositionW, vEyePosition.xyz));
+      vec2 seaRip = texture2D(bumpSampler, vPositionW.xz * 0.043 + seaTime.x * vec2(0.011, 0.007)).xy;
+      vec2 seaRip2 = texture2D(bumpSampler, vPositionW.zx * 0.11 - seaTime.x * vec2(0.008, 0.013)).xy;
+      float seaWash = 0.5 + 0.5 * sin(seaDepth * 4.5 + seaTime.x * 1.2 + (seaRip.x - 0.5) * 5.0);
+      float seaBand = 1.0 - smoothstep(0.0, 0.55 + 0.75 * seaWash, seaDepth);
+      float seaLace = seaRip.y * 0.55 + seaRip2.x * 0.45;
+      seaFoam = seaBand * smoothstep(0.42, 0.78, seaLace + seaBand * 0.35 + seaWash * 0.12) * 0.85;
+      seaFoam = mix(seaFoam, seaBand * 0.35, seaFar);
+      surfaceAlbedo = mix(surfaceAlbedo, vec3(0.72, 0.75, 0.75), seaFoam);
+    }
+  `);
+  // Foam is matt.
+  m.Fragment_Custom_MetallicRoughness(`
+    metallicRoughness.g = mix(metallicRoughness.g, 0.75, seaFoam);
+  `);
+  m.Fragment_Before_Fog(`
+    // Looking across the water at a low angle, it takes on the hazy sky colour.
+    float seaGlance = pow(1.0 - clamp(viewDirectionW.y, 0.0, 1.0), 5.0);
+    finalColor.rgb = mix(finalColor.rgb, seaSky, seaGlance * 0.45 * (1.0 - seaFoam));
+  `);
   sea.material = m;
   sea.isPickable = false;
   sea.freezeWorldMatrix();
-  // Slow drift of the ripples.
+  // Slow drift of the ripples; the foam's clock.
   scene.onBeforeRenderObservable.add(() => {
     const t = performance.now() / 1000;
     m.bumpTexture.uOffset = t * 0.0021;
     m.bumpTexture.vOffset = t * 0.0013;
+    seaTime.x = t % 3600;
   });
   return sea;
 }
@@ -321,6 +411,6 @@ export function buildTerrain(scene, world) {
   const desert = groundMaterial(scene, "groundDesert", true);
   const chunks = [];
   for (const island of world.islands) chunks.push(...buildIsland(scene, world, island, island.def.climate === "desert" ? desert : green));
-  const sea = buildSea(scene);
+  const sea = buildSea(scene, world);
   return { chunks, sea, materials: [green, desert] };
 }
