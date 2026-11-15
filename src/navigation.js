@@ -131,6 +131,31 @@ export class Navigator {
   }
 }
 
+// For racing: the fastest speed (m/s) at each point of a route, so the car
+// can take every bend (at `lat` m/s² sideways) and brake down for it in time
+// (at `brake` m/s²), no faster than `town` in towns or `top` anywhere, and
+// stopped at the end.
+export function raceProfile(points, { lat, brake, town, top }) {
+  const n = points.length;
+  const v = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const i0 = Math.max(0, i - 4);
+    const i1 = Math.min(n - 1, i + 4);
+    const p = points[i];
+    let turn = 0;
+    if (i0 < i && i < i1) {
+      turn = Math.abs(Math.atan2(points[i1].x - p.x, points[i1].z - p.z) - Math.atan2(p.x - points[i0].x, p.z - points[i0].z));
+      if (turn > Math.PI) turn = 2 * Math.PI - turn;
+    }
+    // (The two chords meet over about half the span between their ends.)
+    const radius = turn > 1e-4 ? ((i1 - i0) * ROAD_SAMPLE_STEP) / 2 / turn : 1e6;
+    v[i] = Math.min(top, Math.sqrt(lat * radius), inTown(p.x, p.z, 15) ? town : Infinity);
+  }
+  v[n - 1] = 0;
+  for (let i = n - 2; i >= 0; i--) v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * brake * ROAD_SAMPLE_STEP));
+  return v;
+}
+
 // Drives along a route: steers toward a point a little way ahead (in the
 // correct lane for the country), keeps to a sensible speed, and stops at the end.
 const HOLD = { steer: 0, steerAngle: 0, throttle: 0, brake: 0, reverse: 0, handbrake: true, steerAnalog: true };
@@ -158,6 +183,19 @@ export class AutoDriver {
     this.stuck = 0;
     this.lastImpact = 0;
     this.passCar = null;
+    this.race = null;
+  }
+
+  // Racing (a street race rival, streetRace.js): no speed limits or red
+  // lights, as fast as `profile` (raceProfile) allows everywhere on the
+  // route, and overtaking slower cars when nothing is coming the other way.
+  // `self` is its own traffic car (to ignore), `others` more cars to look out
+  // for (you).
+  startRace(route, { profile, self, others }) {
+    this.start(route);
+    this.race = { profile, self, others };
+    this.offBy = 0;
+    this._out ??= { steer: 0, steerAngle: 0, throttle: 0, brake: 0, reverse: 0, handbrake: false, steerAnalog: true };
   }
 
   stop() {
@@ -283,6 +321,7 @@ export class AutoDriver {
 
   // Returns the controls to apply this frame.
   drive(v, traffic, dt = 1 / 60, rerouted = false) {
+    if (this.race) return this._raceDrive(v, traffic);
     const pts = this.route.points;
     const n = pts.length;
     // Move the progress marker forward to the closest point.
@@ -435,5 +474,188 @@ export class AutoDriver {
     const lookDist = Math.max(4, Math.hypot(tx - v.x, tz - v.z));
     const steerAngle = Math.atan2(2 * v.L * Math.sin(err), lookDist);
     return { steer: 0, steerAngle, throttle, brake, reverse: 0, handbrake: false, steerAnalog: true };
+  }
+
+  // --- Racing ------------------------------------------------------------------
+  // (Runs every frame for every rival, so it makes no new objects: the same
+  // controls object is filled in each time.)
+
+  _raceDrive(v, traffic) {
+    const pts = this.route.points;
+    const n = pts.length;
+    let best = this.progress;
+    let bestD = Infinity;
+    for (let i = this.progress; i < Math.min(n, this.progress + 40); i++) {
+      const d = (pts[i].x - v.x) ** 2 + (pts[i].z - v.z) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    this.progress = best;
+    this.offBy = Math.sqrt(bestD);
+    const speed = v.speed;
+    // At the end of the route (well past the finish line): stopped, done.
+    if ((n - 1 - best) * ROAD_SAMPLE_STEP < 8 && speed < 0.15) {
+      this.arrived = true;
+      this.route = null;
+      return HOLD;
+    }
+    // As fast as the road allows here (the profile already slows for bends
+    // and towns coming up).
+    const profile = this.race.profile;
+    const cruise = Math.min(profile[best], profile[Math.min(n - 1, best + 1)]);
+    let target = cruise;
+    const look = Math.round((7 + speed * 0.75) / ROAD_SAMPLE_STEP);
+    const ti = Math.min(n - 1, best + look);
+    const a = pts[Math.max(0, ti - 1)];
+    const b = pts[ti];
+    let dx = b.x - a.x;
+    let dz = b.z - a.z;
+    const l = Math.hypot(dx, dz) || 1;
+    dx /= l;
+    dz /= l;
+    const island = this.world.islandAt(b.x, b.z);
+    let lane = (island ? island.def.drive : (b.drive ?? "right")) === "left" ? -LANE_OFFSET : LANE_OFFSET;
+    if (this._racePass(v, traffic, cruise)) lane = -lane;
+    else target = Math.min(target, this._raceFollow(v, traffic));
+    const tx = b.x + dz * lane;
+    const tz = b.z - dx * lane;
+    let err = Math.atan2(tx - v.x, tz - v.z) - v.heading;
+    while (err > Math.PI) err -= 2 * Math.PI;
+    while (err < -Math.PI) err += 2 * Math.PI;
+    // Anything about to cross our path (at a junction, say): give way.
+    if (speed > 0.5) {
+      const vx = v.vx;
+      const vz = v.vz;
+      for (const c of traffic.cars) {
+        if (!c.moving || c.racing) continue;
+        const px = c.x - v.x;
+        const pz = c.z - v.z;
+        if (Math.abs(px) > 80 || Math.abs(pz) > 80) continue;
+        const wx = Math.sin(c.yaw) * c.speed - vx;
+        const wz = Math.cos(c.yaw) * c.speed - vz;
+        const w2 = wx * wx + wz * wz;
+        if (w2 < 1) continue;
+        const t = -(px * wx + pz * wz) / w2;
+        if (t <= 0 || t > 2.5) continue;
+        if (Math.hypot(px + wx * t, pz + wz * t) < 3.1) target = Math.min(target, speed * (t < 1.2 ? 0.3 : 0.7));
+      }
+    }
+    // Off the road or not lined up with it (just set back on it, say): steady.
+    if (this.offBy > 6 || Math.abs(err) > 0.6) target = Math.min(target, 10);
+    const out = this._out;
+    if (target < 0.3 && speed < 1.5) {
+      out.steerAngle = 0;
+      out.throttle = 0;
+      out.brake = 1;
+      out.handbrake = true;
+      return out;
+    }
+    out.throttle = speed < target - 0.4 ? clamp((target - speed) / 3, 0.3, 1) : 0;
+    out.brake = speed > target + 0.8 ? clamp((speed - target) / 4, 0.15, 1) : 0;
+    out.handbrake = false;
+    // Pure pursuit, as in drive().
+    out.steerAngle = Math.atan2(2 * v.L * Math.sin(err), Math.max(4, Math.hypot(tx - v.x, tz - v.z)));
+    return out;
+  }
+
+  // The cars to look out for are the traffic (rivals included) and then
+  // `others`: list 0 and list 1. (Plain loops over these, so nothing new is
+  // made each frame.)
+  _list(k, traffic) {
+    return k ? this.race.others : traffic.cars;
+  }
+
+  // Overtaking: something slower just ahead in our lane, and nothing coming
+  // the other way for a good stretch: use the other side of the road until
+  // it's well behind (or something comes the other way after all).
+  _racePass(v, traffic, cruise) {
+    const fx = Math.sin(v.heading);
+    const fz = Math.cos(v.heading);
+    const speed = v.speed;
+    const self = this.race.self;
+    if (this.passCar) {
+      const c = this.passCar;
+      const along = (c.x - v.x) * fx + (c.z - v.z) * fz;
+      const gone = !traffic.cars.includes(c) && !this.race.others.includes(c);
+      if (gone || along < -(8 + (c.type?.length ?? 4.6) / 2) || this._oncoming(v, traffic, 60)) this.passCar = null;
+      else return true;
+    }
+    let ahead = null;
+    let aheadAlong = Infinity;
+    for (let k = 0; k < 2; k++) {
+      const list = this._list(k, traffic);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c === self) continue;
+        const rx = c.x - v.x;
+        const rz = c.z - v.z;
+        const along = rx * fx + rz * fz;
+        if (along < 3 || along > 45 || along > aheadAlong || Math.abs(rx * fz - rz * fx) > 1.8) continue;
+        const sameWay = !c.moving || Math.sin(c.yaw) * fx + Math.cos(c.yaw) * fz > 0.5;
+        const cs = c.moving ? c.speed : 0;
+        if (sameWay && cs < cruise - 2 && cs < speed + 2) {
+          ahead = c;
+          aheadAlong = along;
+        }
+      }
+    }
+    if (!ahead || this._oncoming(v, traffic, 150)) return false;
+    // Nobody already alongside on the other side of the road.
+    for (let k = 0; k < 2; k++) {
+      const list = this._list(k, traffic);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c === self) continue;
+        const rx = c.x - v.x;
+        const rz = c.z - v.z;
+        const along = rx * fx + rz * fz;
+        const side = Math.abs(rx * fz - rz * fx);
+        if (side > 2 && side < 6 && along > -7 && along < 12) return false;
+      }
+    }
+    this.passCar = ahead;
+    return true;
+  }
+
+  // Something coming the other way on the other side of the road within `reach` metres.
+  _oncoming(v, traffic, reach) {
+    const fx = Math.sin(v.heading);
+    const fz = Math.cos(v.heading);
+    for (let k = 0; k < 2; k++) {
+      const list = this._list(k, traffic);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c === this.race.self || !c.moving || Math.sin(c.yaw) * fx + Math.cos(c.yaw) * fz > -0.5) continue;
+        const rx = c.x - v.x;
+        const rz = c.z - v.z;
+        const along = rx * fx + rz * fz;
+        if (along > -5 && along < reach && Math.abs(rx * fz - rz * fx) < 7) return true;
+      }
+    }
+    return false;
+  }
+
+  // The speed that keeps a safe gap to whatever is ahead in our lane going our way.
+  _raceFollow(v, traffic) {
+    const fx = Math.sin(v.heading);
+    const fz = Math.cos(v.heading);
+    let target = Infinity;
+    for (let k = 0; k < 2; k++) {
+      const list = this._list(k, traffic);
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        if (c === this.race.self || c === this.passCar) continue;
+        const rx = c.x - v.x;
+        const rz = c.z - v.z;
+        const along = rx * fx + rz * fz;
+        if (along <= 0 || along > 60 || Math.abs(rx * fz - rz * fx) > 1.6) continue;
+        if (c.moving && Math.sin(c.yaw) * fx + Math.cos(c.yaw) * fz < 0.5) continue;
+        const gap = along - ((c.type?.length ?? 4.6) + (v.length ?? 4.6)) / 2;
+        target = Math.min(target, (c.moving ? c.speed : 0) + Math.max(0, gap - 5) * 0.6);
+      }
+    }
+    return target;
   }
 }

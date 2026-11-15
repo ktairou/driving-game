@@ -44,6 +44,18 @@ export const GARAGE = [
   big("bintruck", "Bin lorry", "Six wheels, very heavy", { power: 250000, maxDrive: 38000, grip: 0.95, mass: 16000, drag: 3.2 }),
 ];
 
+// Free from the start: the concept car and the six everyday cars. The rest
+// are bought with credits won in races and at speed traps (credits.js).
+export const STARTERS = ["gt-red", "sedan", "hatchback", "compact", "wagon", "minivan", "suv"];
+
+// What a vehicle costs in credits: more the faster, quicker and grippier it
+// is (from 250 for a bus to 3,000 for the sports car), rounded to 50.
+export function price(entry) {
+  if (STARTERS.includes(entry.id)) return 0;
+  const s = stats(entry);
+  return Math.round((150 + 379 * (s.speed + s.acceleration + s.grip) ** 1.9) / 50) * 50;
+}
+
 // Rough 0..1 scores for the bars shown in the garage.
 export function stats(entry) {
   const s = entry.spec;

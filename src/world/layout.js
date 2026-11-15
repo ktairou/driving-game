@@ -199,6 +199,43 @@ export const DRAG_STRIPS = [
 // flags and lights stand on it).
 export const DRAG_STRIP = { stage: 40, run: 402, runoff: 260, lanes: 4, lane: 4, apron: 22 };
 
+// Speed traps: a camera pole beside a long straight road and a white line
+// across it. { x, z } is a road sample (world coordinates, not stretched),
+// `heading` the road's direction there and `side` which side of it the pole
+// stands (1 = right of that direction). Picked by tools/plan-extras.mjs and
+// frozen here, so they never move.
+export const SPEED_TRAPS = [
+  { id: "trap-britain-east", name: "East speed trap", island: "britain", x: 553.85, z: 100.38, heading: -2.2248, side: -1 },
+  { id: "trap-britain-north", name: "North speed trap", island: "britain", x: 168.35, z: 520.83, heading: 1.7721, side: -1 },
+  { id: "trap-britain-south-east", name: "South-east speed trap", island: "britain", x: 173.18, z: -141.75, heading: -1.9305, side: -1 },
+  { id: "trap-britain-east-2", name: "East speed trap 2", island: "britain", x: 654.16, z: -244.21, heading: -2.5799, side: -1 },
+  { id: "trap-france-south", name: "South speed trap", island: "france", x: 2591.41, z: -464.21, heading: -1.1888, side: 1 },
+  { id: "trap-france-south-east", name: "South-east speed trap", island: "france", x: 3046.35, z: -475.69, heading: -1.9291, side: 1 },
+  { id: "trap-egypt-south-west", name: "South-west speed trap", island: "egypt", x: -264.26, z: -3202.36, heading: -1.1327, side: 1 },
+  { id: "trap-egypt-north-east", name: "North-east speed trap", island: "egypt", x: 554.11, z: -2310.24, heading: 2.6169, side: 1 },
+  { id: "trap-egypt-north-west", name: "North-west speed trap", island: "egypt", x: -509.37, z: -2344.1, heading: 0.4191, side: 1 },
+  { id: "trap-egypt-east", name: "East speed trap", island: "egypt", x: 617.41, z: -2746.91, heading: -2.9316, side: 1 },
+  { id: "trap-usa-east", name: "East speed trap", island: "usa", x: -2181.16, z: -225.43, heading: 0.6531, side: 1 },
+  { id: "trap-usa-north", name: "North speed trap", island: "usa", x: -2908.38, z: 690.26, heading: -1.7061, side: 1 },
+  { id: "trap-usa-south-west", name: "South-west speed trap", island: "usa", x: -3180.74, z: -376.25, heading: 2.3981, side: 1 },
+  { id: "trap-usa-north-2", name: "North speed trap 2", island: "usa", x: -2517.88, z: 682, heading: -1.3738, side: 1 },
+];
+
+// Street races, from a start gate near one landmark to a finish near another.
+// { x, z, heading } is the gate (a road sample, facing the way the race goes);
+// the route runs from `start` (behind the gate, past the start grid) by way
+// of `via` to `finish`, and the other cars carry on to `runout` so they cross
+// the line at speed. `length` is the race in metres. Picked by
+// tools/plan-extras.mjs and frozen here.
+export const STREET_RACES = [
+  { id: "street-big-ben", name: "Big Ben to Stonehenge", island: "britain", x: -403.46, z: -138.36, heading: 3.0827, start: [-405.07, -108.4], via: [[721.29, -73.95]], finish: [-310.5, 364.2], runout: [-401.61, 145.39], length: 3042 },
+  { id: "street-stonehenge", name: "Stonehenge to Tower Bridge", island: "britain", x: -99.1, z: 9.42, heading: -1.782, start: [-69.94, 16.47], via: [[-727.81, -310.12]], finish: [724.93, 41.47], runout: [624.44, 254.28], length: 2902 },
+  { id: "street-eiffel-tower", name: "Eiffel Tower to Notre-Dame", island: "france", x: 2673.73, z: -128.8, heading: -0.0158, start: [2674.37, -158.8], via: [[3328.9, -179.3]], finish: [2515.62, -239.42], runout: [2282, -294], length: 2242 },
+  { id: "street-pyramids", name: "Pyramids to Abu Simbel", island: "egypt", x: -25.55, z: -2688.65, heading: -2.9505, start: [-19.7, -2659.23], via: [[-231.35, -3216.96]], finish: [494.67, -2230.15], runout: [286.38, -2115.73], length: 2988 },
+  { id: "street-statue-of-liberty", name: "Statue of Liberty to Mount Rushmore", island: "usa", x: -2189.8, z: 350.36, heading: -0.5859, start: [-2174.08, 324.82], via: [[-2614.96, -163.84]], finish: [-3305.57, 203.53], runout: [-3346.83, -29], length: 2644 },
+  { id: "street-empire-state-building", name: "Empire State Building to Hollywood sign", island: "usa", x: -2820.52, z: 310.16, heading: 0.0233, start: [-2820.64, 280.16], via: [[-2640.84, 697.27]], finish: [-2834.61, -518], runout: [-2594.79, -518.76], length: 3250 },
+];
+
 // Deck heights above the sea. Tower Bridge sits lower, like the real one, so
 // the road can climb up to it from the beach within the grade limit.
 export const BRIDGE_DECK = { beam: 14, suspension: 22, tower: 9 };

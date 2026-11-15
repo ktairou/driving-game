@@ -1,5 +1,5 @@
-import "./race.css";
 import { GARAGE } from "./garage.js";
+import { PLACES, TITLES, MEDALS, raceButton, raceChip, startPanel, resultCard } from "./raceUi.js";
 import { CAR_COLOURS } from "./traffic.js";
 import { DRAG_STRIPS } from "./world/layout.js";
 import { STAGE, FINISH, laneW, stripPoint, stagingAt, setLamps, drawBoard } from "./world/dragstrips.js";
@@ -30,9 +30,6 @@ const GIVE_UP = 45; // still not over the line this long after green: the race i
 const STOP_SHORT = 24; // everyone stops this far before the end of the run-off
 const YOU = 2; // your lane
 const THEIR_LANES = [1, 3, 4];
-const PLACES = ["1st", "2nd", "3rd", "4th"];
-const TITLES = ["You won!", "Second place", "Third place", "Fourth place"];
-const MEDALS = ["gold", "silver", "bronze"];
 
 // Forward pull at full throttle, less air and rolling resistance, over mass
 // (vehicle.js on a flat road, going straight). `k` scales the engine.
@@ -69,8 +66,9 @@ function matchEngine(spec, time) {
 }
 
 // The three vehicles nearest yours in power for their weight (so a bus races
-// buses and vans, and a sports car races fast cars).
-function pickRivals(entry) {
+// buses and vans, and a sports car races fast cars). Locked ones too: the
+// other drivers don't need to buy them.
+export function pickRivals(entry) {
   const pw = (g) => g.spec.power / g.spec.mass;
   const mine = pw(entry);
   return GARAGE.filter((g) => g !== entry)
@@ -85,16 +83,11 @@ const shortName = (s) => {
   const n = s.name.replace("Drag strip · ", "");
   return n[0].toUpperCase() + n.slice(1);
 };
-const el = (tag, cls, html = "") => {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  e.innerHTML = html;
-  return e;
-};
 
 export class DragRace {
   // hooks: { entry() -> your garage entry, place(x, z, heading), toast(text),
-  //   ready() -> may a race be offered now, onStart(), kinds: { load(id), release(ids) } }
+  //   ready() -> may a race be offered now, onStart(), kinds: { load(id), release(ids) },
+  //   earn?(place, level) -> credits won }
   constructor({ vehicle, traffic, audio, fuel, settings, save, boardTexture, hooks }) {
     Object.assign(this, { vehicle, traffic, audio, fuel, settings, save, boardTexture, hooks });
     this.state = "idle";
@@ -117,50 +110,29 @@ export class DragRace {
   // --- On screen ---------------------------------------------------------------
 
   _buildUi() {
-    const hud = document.getElementById("hud");
-    this.button = el("button", "action race-action", "Race");
-    this.button.hidden = true;
-    this.button.addEventListener("click", () => this.open());
-    hud.appendChild(this.button);
-
-    this.chip = el("div", "race-hud", `<span class="race-lights"><i></i><i></i><i></i><i></i></span><span class="race-clock">0.00</span><span class="race-place"></span>`);
-    this.chip.hidden = true;
-    hud.appendChild(this.chip);
-    this.dots = [...this.chip.querySelectorAll(".race-lights i")];
-    this.clockEl = this.chip.querySelector(".race-clock");
-    this.placeEl = this.chip.querySelector(".race-place");
-
-    this.panel = el(
-      "div",
-      "panel",
-      `<div class="panel-card race-card">
-        <h2>Drag race</h2>
-        <p class="note">Race three cars over a quarter mile (402 m). Wait for the green light, then go!</p>
-        <div class="row"><div class="label">How hard</div><div class="seg race-levels">${Object.entries(LEVELS).map(([id, l]) => `<button data-v="${id}">${l.name}</button>`).join("")}</div></div>
-        <p class="note race-best"></p>
-        <div class="race-buttons"><button class="secondary race-cancel">Not now</button><button class="primary race-start">Start</button></div>
-      </div>`,
-    );
-    this.panel.hidden = true;
-    document.body.appendChild(this.panel);
-    this.panel.querySelector(".race-levels").addEventListener("click", (e) => {
-      const v = e.target.closest("button")?.dataset.v;
-      if (!v) return;
-      this.level = v;
-      this.settings.raceLevel = v;
-      this.save(this.settings);
-      this._markLevel();
+    this.button = raceButton(() => this.open());
+    this.chipUi = raceChip();
+    this.chip = this.chipUi.el;
+    this.clockEl = this.chipUi.clock;
+    this.placeEl = this.chipUi.place;
+    this.panelUi = startPanel({
+      title: "Drag race",
+      note: "Race three cars over a quarter mile (402 m). Wait for the green light, then go!",
+      onLevel: (v) => {
+        this.level = v;
+        this.settings.raceLevel = v;
+        this.save(this.settings);
+        this._markLevel();
+      },
+      onStart: () => this.start(),
     });
-    this.panel.querySelector(".race-cancel").addEventListener("click", () => (this.panel.hidden = true));
-    this.panel.querySelector(".race-start").addEventListener("click", () => this.start());
-
-    this.result = el("div", "panel", `<div class="panel-card race-card race-result"></div>`);
-    this.result.hidden = true;
-    document.body.appendChild(this.result);
+    this.panel = this.panelUi.el;
+    this.resultUi = resultCard({ onAgain: () => this.again(), onLeave: () => this.leave() });
+    this.result = this.resultUi.el;
   }
 
   _markLevel() {
-    for (const b of this.panel.querySelectorAll(".race-levels button")) b.classList.toggle("on", b.dataset.v === this.level);
+    this.panelUi.markLevel(this.level);
   }
 
   // Your best on a strip, in words (for the panel and the map list).
@@ -177,10 +149,11 @@ export class DragRace {
     if (!s || this.active) return;
     if (this._lowFuel()) return;
     this.strip = s;
+    // (The same level as last time, whichever kind of race that was.)
+    if (LEVELS[this.settings.raceLevel]) this.level = this.settings.raceLevel;
     this._markLevel();
     const best = this.bestText(s);
-    this.panel.querySelector(".race-best").textContent = best ? `Your ${best.replace("Best", "best here:").replace(" · ", " in the ")}` : "No best time here yet.";
-    this.panel.hidden = false;
+    this.panelUi.show({ best: best ? `Your ${best.replace("Best", "best here:").replace(" · ", " in the ")}` : "No best time here yet." });
   }
 
   _lowFuel() {
@@ -444,9 +417,7 @@ export class DragRace {
     const amber = n >= 1 && n <= 3 ? n : 0;
     const go = n === 4;
     setLamps(this.strip, { amber, green: go, red: this.falseStart }, { amber, green: go, red: false });
-    this.dots.forEach((d, i) => {
-      d.className = i < 3 ? (amber === i + 1 ? "amber" : "") : go ? "green" : this.falseStart ? "red" : "";
-    });
+    this.chipUi.lights(n, this.falseStart);
   }
 
   _hud(t = 0) {
@@ -475,6 +446,7 @@ export class DragRace {
     const place = list.findIndex((r) => r.you);
     this.place = place;
     let newBest = false;
+    let earned = 0;
     if (!this.dnf) {
       const rec = (this.settings.races[s.id] ??= { best: null, cars: {} });
       rec.cars ??= {};
@@ -485,41 +457,38 @@ export class DragRace {
       const medal = MEDALS[place];
       if (medal && (!mine.medal || MEDALS.indexOf(medal) < MEDALS.indexOf(mine.medal))) mine.medal = medal;
       if (medal && (!rec.medal || MEDALS.indexOf(medal) < MEDALS.indexOf(rec.medal))) rec.medal = medal;
+      earned = this.hooks.earn?.(place, this.level) ?? 0;
       this.save(this.settings);
     }
     this.lastRuns[s.id] = [...list].sort((a, b) => a.lane - b.lane);
     this._drawBoard(s);
-    this._showResult(list, place, newBest);
+    this._showResult(list, place, newBest, earned);
     this.resultIn = 1.3;
   }
 
-  _showResult(list, place, newBest) {
+  _showResult(list, place, newBest, earned) {
     const units = this.settings.units === "mph" ? ["mph", 2.23694] : ["km/h", 3.6];
-    const card = this.result.firstElementChild;
     const winner = list[0];
     let gap;
     if (this.dnf) gap = "Didn't finish";
     else if (place === 0) gap = `Won by ${fmt(list[1].time - this.youTime)}`;
     else gap = `${fmt(this.youTime - winner.time)} behind`;
-    const medal = this.dnf ? "" : MEDALS[place] ?? "";
     const notes = [];
     if (this.falseStart) notes.push("False start: 1 second added.");
     if (newBest) notes.push("New best on this strip!");
-    card.innerHTML = `
-      <div class="race-top">
-        <div class="race-medal ${medal}">${this.dnf ? "–" : PLACES[place]}</div>
-        <div><h2>${this.dnf ? "You didn't finish" : TITLES[place]}</h2><p class="note">${shortName(this.strip)} · ${LEVELS[this.level].name}</p></div>
-      </div>
-      <div class="race-stats">
-        <div><span>Your time</span><b>${this.dnf ? "--" : fmt(this.youTime)}</b></div>
-        <div><span>Top speed</span><b>${Math.round(this.top * units[1])} ${units[0]}</b></div>
-        <div><span>${place === 0 && !this.dnf ? "Gap" : "To the winner"}</span><b>${gap}</b></div>
-      </div>
-      ${notes.length ? `<p class="race-note">${notes.join(" ")}</p>` : ""}
-      <ol class="race-table">${list.map((r, i) => `<li class="${r.you ? "you" : ""}"><span>${i + 1}</span><span>${r.name}</span><span>${Number.isFinite(r.time) ? fmt(r.time) : "--"}</span></li>`).join("")}</ol>
-      <div class="race-buttons"><button class="secondary race-leave">Leave</button><button class="primary race-again">Race again</button></div>`;
-    card.querySelector(".race-again").addEventListener("click", () => this.again());
-    card.querySelector(".race-leave").addEventListener("click", () => this.leave());
+    if (earned) notes.push(`+${earned} credits.`);
+    this.resultUi.fill({
+      place: this.dnf ? -1 : place,
+      title: this.dnf ? "You didn't finish" : TITLES[place],
+      sub: `${shortName(this.strip)} · ${LEVELS[this.level].name}`,
+      stats: [
+        ["Your time", this.dnf ? "--" : fmt(this.youTime)],
+        ["Top speed", `${Math.round(this.top * units[1])} ${units[0]}`],
+        [place === 0 && !this.dnf ? "Gap" : "To the winner", gap],
+      ],
+      notes,
+      rows: list.map((r) => ({ name: r.name, time: Number.isFinite(r.time) ? fmt(r.time) : "--", you: r.you })),
+    });
   }
 
   // --- When there's no race --------------------------------------------------

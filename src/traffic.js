@@ -71,6 +71,7 @@ export class Traffic {
     this._q = new Quaternion();
     this._pos = new Vector3();
     this.types = [];
+    this.hold = null; // { x, z, r }: moving cars wait outside this circle (a street race's start grid)
     for (const t of types) this.addType(t);
 
     // Junction lookup: which samples of a loop lead onto a connector.
@@ -187,6 +188,20 @@ export class Traffic {
     this.cars = this.cars.filter((c) => c !== car);
   }
 
+  // Moves cars driving within `r` of a point on along their road until
+  // they're clear of it (so a start grid can be laid out there).
+  clearAround(x, z, r) {
+    for (const car of this.cars) {
+      if (!car.moving || car.racing) continue;
+      for (let k = 0; k < 20 && Math.hypot(car.x - x, car.z - z) < r; k++) {
+        car.prevS = car.s;
+        car.s += (car.dir * 20) / ROAD_SAMPLE_STEP;
+        this._handleEnds(car);
+        this._place(car, 0);
+      }
+    }
+  }
+
   // Lane: drive on the left in Britain, on the right everywhere else.
   _place(car, dt) {
     const p = sampleRoad(car.road, car.s);
@@ -222,7 +237,7 @@ export class Traffic {
       const towed = this.cars.filter((c) => c.abandoned && Math.hypot(c.x - player.x, c.z - player.z) > 200);
       if (towed.length) this.cars = this.cars.filter((c) => !towed.includes(c));
     }
-    // (Cars in a drag race are driven by the race, race.js.)
+    // (Cars in a race are driven by the race, race.js and streetRace.js.)
     const moving = this.cars.filter((c) => c.moving && !c.racing);
     for (const car of moving) {
       // Target speed: cruising, slower in towns and on bends.
@@ -232,6 +247,13 @@ export class Traffic {
       // Keep a gap to anything ahead in the same lane, including the player.
       const fx = Math.sin(car.yaw);
       const fz = Math.cos(car.yaw);
+      // Wait short of a start grid that's in use.
+      if (this.hold) {
+        const hx = this.hold.x - car.x;
+        const hz = this.hold.z - car.z;
+        const d = Math.hypot(hx, hz);
+        if (d < this.hold.r + 50 && hx * fx + hz * fz > 0) target = Math.min(target, Math.max(0, (d - this.hold.r) * 0.5));
+      }
       // The gap is bumper to bumper, so long buses keep their distance too.
       const ahead = (ox, oz, r, length) => {
         const rx = ox - car.x;
