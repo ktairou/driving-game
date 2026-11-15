@@ -28,6 +28,12 @@ The iPad closes the page when graphics memory runs out. Measured on desktop at t
 preset (what the iPad gets on Auto): about **650 MB** of textures at start. Treat that as the
 ceiling, not a target.
 
+- **Baseline (2026-11-15, before step 1), measured with `node tools/check.mjs --level medium`:
+  737 MB of textures** (sky 100, ground and road 245, drawn-in-code 130, people 67, traffic
+  vehicles 66, landmarks 61, concept car 49, shadow 17). This is the ceiling.
+- `tools/check.mjs` loads the game in a hidden Chrome against the running dev server and
+  reports load time, errors, frame cost, memory by group and screenshots; `tools/sheet.mjs`
+  puts screenshots side by side.
 - Measure before and after each part: sum `width * height * 4 * (mipmaps ? 1.33 : 1)` (x6 for
   cube maps, x4 for float textures) over the unique internal textures in `scene.textures`.
   Report both numbers. Set the saved setting `graphics` to `"medium"` first
