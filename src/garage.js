@@ -5,8 +5,11 @@ import { Color3 } from "@babylonjs/core";
 // (public/assets/vehicles), each with its own handling.
 //   power: engine power (W)   maxDrive: pulling force (N)   mass: kg
 //   grip: tyre grip           drag: air resistance (bigger for boxy vehicles)
-const car = (id, name, trim, spec, extra = {}) => ({ id, model: id, name, trim, kind: "car", spec, ...extra });
-const big = (id, name, trim, spec, extra = {}) => ({ id, model: id, name, trim, kind: "service", spec: { gears: [4.2, 2.8, 1.9, 1.4, 1.1, 0.85], redline: 3200, ...spec }, ...extra });
+// `sound` is the engine it makes (audio.js ENGINES): everyday, sports,
+// diesel (buses and lorries) or electric (every electric one, the city bus too).
+const engine = (extra, fallback) => (extra.electric ? "electric" : fallback);
+const car = (id, name, trim, spec, extra = {}) => ({ id, model: id, name, trim, kind: "car", spec, sound: engine(extra, "everyday"), ...extra });
+const big = (id, name, trim, spec, extra = {}) => ({ id, model: id, name, trim, kind: "service", spec: { gears: [4.2, 2.8, 1.9, 1.4, 1.1, 0.85], redline: 3200, ...spec }, sound: engine(extra, "diesel"), ...extra });
 
 export const GARAGE = [
   {
@@ -17,19 +20,20 @@ export const GARAGE = [
     kind: "car",
     paint: { colour: [0.666, 0, 0], metallic: 1, roughness: 0.18 },
     spec: { power: 300000, maxDrive: 10500, grip: 1.15, mass: 1350 },
+    sound: "sports",
   },
   car("sedan", "Saloon", "Family four-door", { power: 150000, maxDrive: 8200, grip: 1.08, mass: 1500 }),
   car("hatchback", "Hatchback", "Small and nippy", { power: 110000, maxDrive: 7200, grip: 1.08, mass: 1200 }, { electric: true }),
   car("compact", "City car", "Tiny town runabout", { power: 70000, maxDrive: 5600, grip: 1.04, mass: 1000 }, { electric: true }),
-  car("coupe", "Coupe", "Two-door sports", { power: 240000, maxDrive: 9800, grip: 1.16, mass: 1380 }),
-  car("sport", "Sports car", "Low and very fast", { power: 380000, maxDrive: 12500, grip: 1.3, mass: 1250, drag: 0.36 }),
+  car("coupe", "Coupe", "Two-door sports", { power: 240000, maxDrive: 9800, grip: 1.16, mass: 1380 }, { sound: "sports" }),
+  car("sport", "Sports car", "Low and very fast", { power: 380000, maxDrive: 12500, grip: 1.3, mass: 1250, drag: 0.36 }, { sound: "sports" }),
   car("wagon", "Estate", "Room for the dog", { power: 150000, maxDrive: 8200, grip: 1.07, mass: 1550 }),
   car("minivan", "People carrier", "Seats seven", { power: 150000, maxDrive: 8500, grip: 1.0, mass: 1850, drag: 0.55 }, { electric: true }),
   car("suv", "SUV", "Big and tall", { power: 220000, maxDrive: 10000, grip: 1.02, mass: 2100, drag: 0.6 }),
   car("offroad", "Off-roader", "Goes anywhere", { power: 180000, maxDrive: 10500, grip: 1.08, mass: 2000, drag: 0.65 }),
   car("pickup", "Pickup", "Truck with a flat bed", { power: 260000, maxDrive: 11000, grip: 1.0, mass: 2200, drag: 0.65 }),
   car("taxi", "Taxi", "Yellow cab", { power: 160000, maxDrive: 8500, grip: 1.06, mass: 1650 }, { kind: "service", electric: true }),
-  car("police", "Police car", "Fast pursuit car", { power: 300000, maxDrive: 11000, grip: 1.15, mass: 1750 }, { kind: "service" }),
+  car("police", "Police car", "Fast pursuit car", { power: 300000, maxDrive: 11000, grip: 1.15, mass: 1750 }, { kind: "service", sound: "sports" }),
   big("ambulance", "Ambulance", "Emergency van", { power: 220000, maxDrive: 14000, grip: 0.98, mass: 3800, drag: 1.2 }),
   big("postvan", "Post van", "Parcels and letters", { power: 120000, maxDrive: 9000, grip: 0.98, mass: 2600, drag: 0.9 }, { electric: true }),
   big("worktruck", "Work truck", "Road repair crew", { power: 200000, maxDrive: 12000, grip: 1.0, mass: 3200, drag: 1.0 }),

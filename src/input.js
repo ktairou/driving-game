@@ -14,10 +14,12 @@ export class Input {
     this.handbrake = false;
     this.reverse = 0;
     this.steerAnalog = false;
+    this.horn = false; // held: H, or the Horn button
+    this.lookBack = false; // held: B, or the Look back button
     this.footMode = false;
     this.stick = { x: 0, y: 0 };
     this.keys = new Set();
-    this.touch = { steer: 0, steering: false, gas: false, brake: false, reverse: false, stickX: 0, stickY: 0 };
+    this.touch = { steer: 0, steering: false, gas: false, brake: false, reverse: false, horn: false, look: false, stickX: 0, stickY: 0 };
     this.handlers = { camera: () => {}, reset: () => {}, any: () => {} };
   }
 
@@ -27,7 +29,8 @@ export class Input {
       this.keys.add(e.code);
       if (e.code === "KeyC") this.handlers.camera();
       if (e.code === "KeyR") this.handlers.reset();
-      this.handlers.any();
+      // (Hooting or glancing back doesn't take over from the self-driving.)
+      if (e.code !== "KeyH" && e.code !== "KeyB") this.handlers.any();
     });
     window.addEventListener("keyup", (e) => this.keys.delete(e.code));
     window.addEventListener("blur", () => this.keys.clear());
@@ -38,7 +41,7 @@ export class Input {
     return this.touch.steering || this.touch.gas || this.touch.brake || this.touch.reverse;
   }
 
-  attachTouch({ steerZone, wheel, stick, stickKnob, gas, brake, reverse }) {
+  attachTouch({ steerZone, wheel, stick, stickKnob, gas, brake, reverse, horn, look }) {
     let steerId = null;
     let lastAngle = 0;
     let wheelAngle = 0;
@@ -103,7 +106,8 @@ export class Input {
     steerZone.addEventListener("pointerup", endSteer);
     steerZone.addEventListener("pointercancel", endSteer);
 
-    const pedal = (el, key) => {
+    // A button that counts while held. `takesOver`: pressing it stops the self-driving.
+    const pedal = (el, key, takesOver = true) => {
       const ids = new Set();
       const update = () => {
         this.touch[key] = ids.size > 0;
@@ -113,7 +117,7 @@ export class Input {
         ids.add(e.pointerId);
         el.setPointerCapture(e.pointerId);
         update();
-        this.handlers.any();
+        if (takesOver) this.handlers.any();
         e.preventDefault();
       });
       const up = (e) => {
@@ -127,6 +131,8 @@ export class Input {
     pedal(gas, "gas");
     pedal(brake, "brake");
     pedal(reverse, "reverse");
+    if (horn) pedal(horn, "horn", false);
+    if (look) pedal(look, "look", false);
   }
 
   update() {
@@ -147,6 +153,8 @@ export class Input {
     this.brake = this.touch.brake || down ? 1 : 0;
     this.reverse = this.touch.reverse || k.has("KeyX") ? 1 : 0;
     this.handbrake = k.has("Space");
+    this.horn = this.touch.horn || k.has("KeyH");
+    this.lookBack = this.touch.look || k.has("KeyB");
     // On foot: joystick, or keys (hold Shift to run).
     if (this.touch.steering) {
       this.stick.x = this.touch.stickX;

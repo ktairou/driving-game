@@ -147,8 +147,36 @@ button {
 }
 
 .hud-foot .pedals,
-.hud-foot .speedo {
+.hud-foot .speedo,
+.hud-foot .drive-extras {
   display: none;
+}
+
+/* Look back and Horn: a small row just above the pedals, clear of the
+   steering wheel, the pedals themselves and the cockpit's dials. */
+.drive-extras {
+  position: absolute;
+  right: calc(28px + var(--safe-r));
+  bottom: calc(226px + var(--safe-b));
+  display: flex;
+  gap: 10px;
+}
+
+.extra {
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 24px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.extra.pressed {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 /* Driver view with a cockpit: its dials sit where the speed panel and the
@@ -421,6 +449,7 @@ button {
 }
 
 .hud-fuel .pedals,
+.hud-fuel .drive-extras,
 .hud-fuel #steer-zone,
 .hud-fuel #btn-fuel {
   display: none;

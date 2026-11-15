@@ -1,6 +1,7 @@
-import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer, Quaternion, Matrix } from "@babylonjs/core";
+import { ImportMeshAsync, TransformNode, Color3, DynamicTexture, Texture, PBRMaterial, Vector3, Mesh, VertexBuffer, Quaternion, Matrix, Ray } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import { measureCockpit, samplePaint } from "./cabin.js";
+import { findTailLamps } from "./carFx.js";
 
 export const WHEEL_RADIUS = 0.38;
 const WHEELS = [
@@ -115,11 +116,15 @@ export async function loadCarLod(scene) {
     wheelParts.push(merged);
   }
   const bodyParts = result.meshes.filter((m) => m.getTotalVertices() > 0 && !handled.has(m));
+  // Its tail lamps, for the brake lights on the traffic version (the lamp
+  // material is shared by every car drawn, so it can't light up for just one).
+  const tailLamps = await findTailLamps(bodyParts, { test: /^Brakelight$/, red: false });
   const mesh = mergeParts([...bodyParts, ...wheelParts], true);
   mesh.name = "carLod";
   gltfRoot.dispose();
   wheelParts.forEach((m) => m.dispose());
   mesh.isPickable = false;
+  mesh.metadata = { tailLamps };
   return mesh;
 }
 
@@ -255,7 +260,10 @@ export async function loadCar(scene, onProgress) {
 
   // Driver's eye: centre seat, behind and above the steering wheel.
   const eye = steeringPivot ? steeringPivot.position.add(new Vector3(0, 0.3, -0.6)) : new Vector3(0, 0.95, 0.2);
-  return { root, body, wheels, meshes, shadowMeshes, geometry, materials: [...materials], steeringPivot, steeringAxis, eye };
+  // (Its seats fill the view behind the driver, so looking behind uses the
+  // camera on the back; see camera.js.)
+  const views = { seesBehind: seesBehind(meshes, eye, 4.6) };
+  return { root, body, wheels, meshes, shadowMeshes, geometry, materials: [...materials], steeringPivot, steeringAxis, eye, views };
 }
 
 export function setPaint(car, color) {
@@ -288,6 +296,26 @@ function prepareVehicleMaterials(materials) {
     if (/glass/i.test(m.name)) m.backFaceCulling = false;
   }
   return lights;
+}
+
+// From the driver's seat, can you see the road behind through the back of
+// the vehicle? Rays from the head (turned and leaning in, as when looking
+// behind) towards the back; glass lets them through, anything else blocks.
+// A car's back window is clear; a lorry's cab or a bus is a wall.
+function seesBehind(meshes, eye, length) {
+  const solid = meshes.filter((m) => !/glass/i.test(m.material?.name ?? "") && m.getTotalVertices() > 0);
+  for (const m of solid) m.computeWorldMatrix(true);
+  const from = new Vector3(eye.x * 0.5, eye.y + 0.04, eye.z);
+  let open = 0;
+  let n = 0;
+  for (const yaw of [-0.3, 0, 0.3]) {
+    for (const pitch of [-0.1, 0.03]) {
+      const ray = new Ray(from, new Vector3(Math.sin(yaw), pitch, -Math.cos(yaw)).normalize(), length + 1);
+      n++;
+      if (!solid.some((m) => ray.intersectsMesh(m, true).hit)) open++;
+    }
+  }
+  return open / n >= 0.5;
 }
 
 const boundsOf = (meshes) => {
@@ -392,7 +420,13 @@ export async function loadVehicle(scene, id, onProgress) {
   const views = {
     bonnet: big ? new Vector3(0, height * 0.55, max.z + 0.25) : new Vector3(0, height * 0.8, geometry.frontZ - 0.1),
     bumper: new Vector3(0, Math.min(0.6, height * 0.3), max.z + 0.15),
+    // Looking behind from the bonnet or bumper view: just off the back, facing back.
+    rear: new Vector3(0, Math.min(1.4, Math.max(0.8, height * 0.5)), min.z - 0.2),
   };
+  // (If not, looking behind from the driver's seat uses that rear view too.)
+  views.seesBehind = seesBehind(meshes, eye, length);
+  // Where its tail lamps are, for the brake lights.
+  const tailLamps = await findTailLamps(meshes);
   return {
     id,
     root,
@@ -407,6 +441,7 @@ export async function loadVehicle(scene, id, onProgress) {
     eye,
     cockpit,
     views,
+    tailLamps,
     lights: { head, tail: [] },
     wheelRadius: wheels.length ? avg(wheels, (w) => w.radius) : WHEEL_RADIUS,
     chase: { dist: Math.max(1, length / 4.6), height: Math.max(1, height / 1.4) },
@@ -422,9 +457,10 @@ export async function loadVehicleLod(scene, id) {
   const materials = new Set(parts.map((m) => m.material).filter(Boolean));
   const lights = prepareVehicleMaterials(materials);
   const { min, max } = boundsOf(parts);
+  const tailLamps = await findTailLamps(parts);
   const mesh = mergeParts(parts, true);
   mesh.name = `traffic_${id}`;
   gltfRoot.dispose();
   mesh.isPickable = false;
-  return { mesh, lights, length: max.z - min.z, halfWidth: (max.x - min.x) / 2 };
+  return { mesh, lights, length: max.z - min.z, halfWidth: (max.x - min.x) / 2, centreZ: (min.z + max.z) / 2, tailLamps };
 }

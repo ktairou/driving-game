@@ -359,6 +359,17 @@ export class People {
     for (const p of this.people) {
       if (p.kind === "player" || p.hidden) continue;
       const nat = this.natural[p.sex];
+      // Startled by a horn: a few quick steps out of the car's way.
+      if (p.dodge > 0) {
+        p.dodge -= dt;
+        p.moving = true;
+        p.speed = nat.run;
+        p.x += p.dodgeX * 2.2 * dt;
+        p.z += p.dodgeZ * 2.2 * dt;
+        p.heading = turnTowards(p.heading, Math.atan2(p.dodgeX, p.dodgeZ), 10 * dt);
+        if (p.kind !== "pavement") p.y = this.world.getHeight(p.x, p.z);
+        continue;
+      }
       if (p.pause > 0) {
         // Standing for a moment: sightseers look at the landmark.
         p.pause -= dt;
@@ -403,6 +414,27 @@ export class People {
         }
       }
     }
+  }
+
+  // A horn from (x, z), heading along (fx, fz): anyone on or near the road
+  // ahead steps aside, away from the car's path. Returns how many did.
+  honk(x, z, fx, fz) {
+    let n = 0;
+    for (const p of this.people) {
+      if (p.kind === "player" || p.hidden) continue;
+      const rx = p.x - x;
+      const rz = p.z - z;
+      const along = rx * fx + rz * fz;
+      const side = rx * fz - rz * fx; // + is to the right of the car
+      if (along < -3 || along > 35 || Math.abs(side) > 9) continue;
+      const s = side >= 0 ? 1 : -1;
+      p.dodge = 0.6 + this.rand() * 0.25;
+      p.dodgeX = fz * s;
+      p.dodgeZ = -fx * s;
+      p.pause = 0;
+      n++;
+    }
+    return n;
   }
 
   // Moves you (on foot) with the joystick. Returns nothing; updates `player`.
@@ -461,7 +493,7 @@ export class People {
       k.fix.multiplyToRef(place, out);
       out.multiplyToRef(MIRROR_Z, place);
       place.copyToArray(k.matrices, k.count * 16);
-      const clip = !p.moving ? k.ranges.idle : p.jogger ? k.ranges.run : k.ranges.walk;
+      const clip = !p.moving ? k.ranges.idle : p.jogger || p.dodge > 0 ? k.ranges.run : k.ranges.walk;
       const o = k.count * 4;
       k.settings[o] = clip.start;
       k.settings[o + 1] = clip.end;

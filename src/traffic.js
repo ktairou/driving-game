@@ -3,6 +3,7 @@ import { clamp, lerp, mulberry32 } from "./noise.js";
 import { inTown } from "./world/road.js";
 import { speedLimitAt } from "./world/trafficLights.js";
 import { ISLANDS, LANE_OFFSET, ROAD_HALF_WIDTH, ROAD_SAMPLE_STEP } from "./world/layout.js";
+import { fxKind } from "./car/carFx.js";
 
 export const CAR_COLOURS = [
   [0.75, 0.05, 0.04], [0.92, 0.92, 0.9], [0.06, 0.06, 0.07], [0.1, 0.22, 0.55], [0.55, 0.57, 0.6],
@@ -58,13 +59,17 @@ function sampleRoad(road, s) {
 
 // Cars driving round the roads by themselves, plus cars parked in towns.
 // Each kind of vehicle is drawn as one instanced mesh.
-//   types: [{ id, mesh, length, halfWidth, weight, parked, coloured }]
+//   types: [{ id, mesh, length, halfWidth, weight, parked, coloured, centreZ, tailLamps }]
 export class Traffic {
   constructor(scene, world, types, quality) {
     this.world = world;
     this.rand = mulberry32(1234);
     this.cars = [];
     this.maxInstances = quality.traffic + quality.parked + 4;
+    this.fx = null; // brake lights and shadows (car/carFx.js), set by main.js
+    this._m = new Matrix();
+    this._q = new Quaternion();
+    this._pos = new Vector3();
     this.types = [];
     for (const t of types) this.addType(t);
 
@@ -100,6 +105,7 @@ export class Traffic {
     type.mesh.thinInstanceCount = 0;
     type.mesh.alwaysSelectAsActiveMesh = true;
     type.mesh.receiveShadows = true;
+    type.fx = fxKind({ lamps: t.tailLamps, length: t.length, halfWidth: t.halfWidth, centreZ: t.centreZ });
     this.types.push(type);
     return type;
   }
@@ -186,8 +192,10 @@ export class Traffic {
     const dz = p.tz * car.dir;
     const island = this.world.islandAt(p.x, p.z);
     const drive = island ? island.def.drive : car.road.drive;
-    car.laneTarget = drive === "left" ? -LANE_OFFSET : LANE_OFFSET;
-    car.lane = dt ? lerp(car.lane, car.laneTarget, 1 - Math.exp(-dt * 0.6)) : car.laneTarget;
+    // (Pulling over: 1.2 m nearer the kerb, short of where cars park.)
+    const pulling = car.pullOver > 0;
+    car.laneTarget = (drive === "left" ? -1 : 1) * (LANE_OFFSET + (pulling ? 1.2 : 0));
+    car.lane = dt ? lerp(car.lane, car.laneTarget, 1 - Math.exp(-dt * (pulling ? 1.6 : 0.6))) : car.laneTarget;
     // right of travel = (dz, -dx)
     car.x = p.x + dz * car.lane;
     car.z = p.z - dx * car.lane;
@@ -246,6 +254,14 @@ export class Traffic {
         car.stopTimer -= dt;
         target = 0;
       }
+      // Hooted at: pull over towards the kerb and crawl for a few seconds.
+      if (car.pullOver > 0) {
+        car.pullOver -= dt;
+        target = Math.min(target, 4);
+      }
+      // Brake lights while slowing hard or held at a stop, kept on a moment so
+      // they don't flicker as the wanted speed wobbles.
+      car.brakeHold = car.speed > target + 0.8 || (target < 0.3 && car.speed < 2) ? 0.5 : Math.max(0, (car.brakeHold ?? 0) - dt);
       const rate = car.speed < target ? 2.6 : 7;
       car.speed = car.speed + clamp(target - car.speed, -rate * dt, rate * dt);
 
@@ -255,13 +271,12 @@ export class Traffic {
       this._place(car, dt);
     }
 
-    // Draw the nearby ones.
+    // Draw the nearby ones (each with its shadow and, when slowing, brake lights).
     const cx = camera.globalPosition.x;
     const cz = camera.globalPosition.z;
-    const m = Matrix.Identity();
-    const q = new Quaternion();
-    const pos = new Vector3();
-    const one = Vector3.One();
+    const m = this._m;
+    const q = this._q;
+    const pos = this._pos;
     for (const t of this.types) t.count = 0;
     for (const car of this.cars) {
       const t = car.type;
@@ -269,10 +284,17 @@ export class Traffic {
       if (Math.abs(car.x - cx) > DRAW_RANGE || Math.abs(car.z - cz) > DRAW_RANGE) continue;
       Quaternion.RotationYawPitchRollToRef(car.yaw, car.pitch, 0, q);
       pos.set(car.x, car.y, car.z);
-      Matrix.ComposeToRef(one, q, pos, m);
+      Matrix.ComposeToRef(Vector3.OneReadOnly, q, pos, m);
       m.copyToArray(t.matrices, t.count * 16);
-      if (t.colours) t.colours.set([car.colour[0], car.colour[1], car.colour[2], 1], t.count * 4);
+      if (t.colours) {
+        const o = t.count * 4;
+        t.colours[o] = car.colour[0];
+        t.colours[o + 1] = car.colour[1];
+        t.colours[o + 2] = car.colour[2];
+        t.colours[o + 3] = 1;
+      }
       t.count++;
+      this.fx?.add(m, t.fx, car.moving && car.brakeHold > 0);
     }
     for (const t of this.types) {
       t.mesh.thinInstanceCount = t.count;
@@ -316,6 +338,27 @@ export class Traffic {
       car.s = j.at;
       car.dir = this.rand() < 0.5 ? 1 : -1;
     }
+  }
+
+  // A horn from (x, z), facing `heading`: the nearest car ahead going the same
+  // way pulls over for a few seconds. Returns that car, if any.
+  honk(x, z, heading) {
+    const fx = Math.sin(heading);
+    const fz = Math.cos(heading);
+    let best = null;
+    let bestAlong = 45;
+    for (const c of this.cars) {
+      if (!c.moving) continue;
+      const rx = c.x - x;
+      const rz = c.z - z;
+      const along = rx * fx + rz * fz;
+      if (along < 2 || along > bestAlong || Math.abs(rx * fz - rz * fx) > 3) continue;
+      if (Math.sin(c.yaw) * fx + Math.cos(c.yaw) * fz < 0.7) continue;
+      best = c;
+      bestAlong = along;
+    }
+    if (best) best.pullOver = 4;
+    return best;
   }
 
   // Circles other things should bump into: a row of them along each vehicle.
