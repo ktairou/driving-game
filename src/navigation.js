@@ -129,6 +129,38 @@ export class Navigator {
     }
     return { points, length: dist[goal] };
   }
+
+  // Road points between `min` and `max` metres' drive from (x, z), not on
+  // the way to a drag strip: [{ x, z, d }] (d: metres). For picking where a
+  // vehicle sent to you sets off from (rescue.js).
+  around(x, z, min, max) {
+    const start = this._node(x, z);
+    const dist = new Map([[start, 0]]);
+    const heap = new MinHeap();
+    heap.push(start, 0);
+    const out = [];
+    while (heap.size) {
+      const [d, u] = heap.pop();
+      if (d > dist.get(u)) continue;
+      if (d >= min) {
+        let ri = 0;
+        while (ri + 1 < this.offset.length && this.offset[ri + 1] <= u) ri++;
+        const road = this.world.network.roads[ri];
+        if (road.style !== "drag") {
+          const [px, pz] = road.points[u - this.offset[ri]];
+          out.push({ x: px, z: pz, d });
+        }
+      }
+      for (const [v, w] of this.adj[u]) {
+        const nd = d + w;
+        if (nd <= max && nd < (dist.get(v) ?? Infinity)) {
+          dist.set(v, nd);
+          heap.push(v, nd);
+        }
+      }
+    }
+    return out;
+  }
 }
 
 // For racing: the fastest speed (m/s) at each point of a route, so the car

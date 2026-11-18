@@ -277,6 +277,13 @@ export class GameAudio {
     this._burst("lowpass", 1200, 1, 1.4);
   }
 
+  // A speed camera taking your picture: a sharp click and the shutter just after.
+  shutter() {
+    if (!this.ctx) return;
+    this._burst("highpass", 2600, 0.45, 0.03);
+    this._burst("bandpass", 1700, 0.3, 0.06, this.white, 0.075);
+  }
+
   // A short beep for the drag strip's start lights: lower for each amber,
   // higher and longer for green.
   beep(high = false) {
@@ -337,13 +344,14 @@ export class GameAudio {
     return out;
   }
 
-  // Called every frame. `car` is the vehicle (or null when walking).
-  update(dt, { car, onFoot, inCabin }) {
+  // Called every frame. `car` is the vehicle (or null when walking);
+  // `engineOff`: out of fuel, so the engine is silent (the tyres aren't).
+  update(dt, { car, onFoot, inCabin, engineOff = false }) {
     if (!this.ctx || this.ctx.state !== "running") return;
     const speed = car ? car.speed : 0;
     const driving = car && !onFoot;
 
-    const t = this.engineTargets(car, driving, inCabin, this.targets);
+    const t = this.engineTargets(car, driving && !engineOff, inCabin, this.targets);
     if (this.engineSrc) this._set(this.engineSrc.playbackRate, t.rate, 0.05);
     this._set(this.engineTone.frequency, t.tone || 400);
     this._set(this.engineGain.gain, t.gain, 0.12);

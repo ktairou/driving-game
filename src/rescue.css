@@ -1,0 +1,53 @@
+/* ---------- Out of fuel: calling the road service (rescue.js) ---------- */
+
+/* "Out of fuel" and the Call for help button, then how help is getting on:
+   above the Get out and Fill up buttons, clear of the wheel and pedals. */
+.rescue {
+  position: absolute;
+  left: 50%;
+  bottom: calc(208px + var(--safe-b));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 20px;
+  border-radius: 999px;
+  background: var(--glass-strong);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* With the button: room for it on the right, and the words in red. */
+.rescue.asking {
+  padding: 6px 6px 6px 20px;
+}
+
+.rescue.asking .rescue-text {
+  color: #ff8a80;
+}
+
+.rescue-call {
+  padding: 13px 22px;
+  border-radius: 999px;
+  background: #f3f5f7;
+  color: #11161d;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rescue-call:active {
+  opacity: 0.7;
+}
+
+/* Driver view: the cockpit's dials sit down there, so it goes above the
+   moved-up Get out and Fill up buttons. */
+.hud-cockpit .rescue {
+  bottom: calc(37% + 116px + var(--safe-b));
+}
+
+/* Not while filling up at a pump. */
+.hud-fuel .rescue {
+  display: none;
+}

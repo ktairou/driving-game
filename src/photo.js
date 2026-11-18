@@ -192,23 +192,23 @@ export class PhotoMode {
 
   // On the iPad a download link can open the picture in a new tab instead,
   // so it goes to the share sheet, which has "Save Image". On a computer it
-  // downloads.
-  deliver(file) {
+  // downloads. `say` shows a message (the speed camera album has its own place).
+  deliver(file, say = (text) => this._say(text)) {
     if (isTouchDevice() && navigator.canShare?.({ files: [file] })) {
       this.sharing = true;
       navigator
         .share({ files: [file] })
         .catch((err) => {
           // (Closing the share sheet isn't a failure.)
-          if (err.name !== "AbortError") this._download(file);
+          if (err.name !== "AbortError") this._download(file, say);
         })
         .finally(() => (this.sharing = false));
       return;
     }
-    this._download(file);
+    this._download(file, say);
   }
 
-  _download(file) {
+  _download(file, say) {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(file);
     a.download = file.name;
@@ -216,7 +216,7 @@ export class PhotoMode {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
-    this._say("Picture saved");
+    say("Picture saved");
   }
 
   // ---------- Controls ----------

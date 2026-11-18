@@ -22,6 +22,7 @@ export class Vehicle {
     this.wheelSlip = [0, 0, 0, 0];
     this.scrub = 0; // the most of those
     this.throttle = 0;
+    this.engineOff = false; // out of fuel: no drive (set by the game each frame)
     this.dynamic = []; // moving things to bump into, refreshed every frame
     this.onBump = null;
     this.onImpact = null; // (hit) for dents, sparks and smoke
@@ -192,7 +193,9 @@ export class Vehicle {
     // --- Engine, brakes, reverse ----------------------------------------------
     let drive = 0;
     let brake = 0;
-    const throttle = input.throttle;
+    // Out of fuel (or being filled up): the engine gives nothing, but the
+    // brakes and steering still work and the car rolls on to a stop.
+    const throttle = this.engineOff ? 0 : input.throttle;
     const pedalBrake = input.brake;
     if (throttle > 0) {
       if (vLong > -0.8) drive = throttle * Math.min(this.maxDrive, this.power / Math.max(Math.abs(vLong), 1));
@@ -201,7 +204,9 @@ export class Vehicle {
     // The brake only ever slows or holds the car; Reverse backs it up
     // (stopping it first if it is still rolling forwards).
     if (pedalBrake > 0) brake += pedalBrake;
-    const reverse = input.reverse ?? 0;
+    // A dead engine drags a little, so the car rolls to a stop rather than creeping on.
+    const engineDrag = this.engineOff ? 0.02 : 0;
+    const reverse = this.engineOff ? 0 : input.reverse ?? 0;
     if (reverse > 0) {
       if (vLong > 0.8) brake += reverse;
       else if (vLong > -8) drive -= reverse * this.reverseForce; // reverse tops out near 18 mph
@@ -210,7 +215,7 @@ export class Vehicle {
 
     let fLong = drive;
     if (this.grounded) {
-      const brakeF = clamp(brake, 0, 1) * this.brakeForce + (handbrake ? 5500 : 0);
+      const brakeF = clamp(brake + engineDrag, 0, 1) * this.brakeForce + (handbrake ? 5500 : 0);
       // Brakes stop the car, they never push it backwards.
       const maxStop = (Math.abs(vLong) * this.mass) / dt;
       fLong -= Math.sign(vLong) * Math.min(brakeF, maxStop);
@@ -279,7 +284,7 @@ export class Vehicle {
     } else {
       this.yawRate *= 1 - 0.8 * dt;
     }
-    if (Math.abs(vLong) < 0.05 && throttle === 0 && !(input.reverse > 0)) vLong = 0;
+    if (Math.abs(vLong) < 0.05 && throttle === 0 && !(reverse > 0)) vLong = 0;
 
     this.heading += this.yawRate * dt;
     const s2 = Math.sin(this.heading);
@@ -288,7 +293,7 @@ export class Vehicle {
     this.vz = c2 * vLong - s2 * vLat;
 
     // Gravity pulls you down hills (but a stopped car stays parked).
-    if (this.grounded && !(throttle === 0 && !(input.reverse > 0) && speed < 1.5)) {
+    if (this.grounded && !(throttle === 0 && !(reverse > 0) && speed < 1.5)) {
       const n = this.world.getNormal(this.x, this.z, 1.5);
       this.vx += n[0] * G * n[1] * dt;
       this.vz += n[2] * G * n[1] * dt;
