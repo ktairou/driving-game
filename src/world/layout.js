@@ -316,7 +316,7 @@ export const STREET_RACES = [
   { id: "street-stonehenge", name: "Stonehenge to Tower Bridge", island: "britain", x: -99.1, z: 9.42, heading: -1.782, start: [-69.94, 16.47], via: [[-727.81, -310.12]], finish: [724.93, 41.47], runout: [624.44, 254.28], length: 2902 },
   { id: "street-eiffel-tower", name: "Eiffel Tower to Notre-Dame", island: "france", x: 2673.73, z: -128.8, heading: -0.0158, start: [2674.37, -158.8], via: [[3328.9, -179.3]], finish: [2515.62, -239.42], runout: [2282, -294], length: 2242 },
   { id: "street-pyramids", name: "Pyramids to Abu Simbel", island: "egypt", x: -25.55, z: -2688.65, heading: -2.9505, start: [-19.7, -2659.23], via: [[-231.35, -3216.96]], finish: [494.67, -2230.15], runout: [286.38, -2115.73], length: 2796 },
-  { id: "street-statue-of-liberty", name: "Statue of Liberty to Mount Rushmore", island: "usa", x: -2189.8, z: 350.36, heading: -0.5859, start: [-2174.08, 324.82], via: [[-2614.96, -163.84]], finish: [-3305.57, 203.53], runout: [-3159.38, 391.17], length: 2334 },
+  { id: "street-statue-of-liberty", name: "Statue of Liberty to Mount Rushmore", island: "usa", x: -2189.8, z: 350.36, heading: -0.5859, start: [-2174.08, 324.82], via: [[-2352.46, 452.8], [-2614.96, -163.84]], finish: [-3305.57, 203.53], runout: [-3159.38, 391.17], length: 2452 },
   { id: "street-empire-state-building", name: "Empire State Building to Hollywood sign", island: "usa", x: -2820.52, z: 310.16, heading: 0.0233, start: [-2820.64, 280.16], via: [[-2640.84, 697.27]], finish: [-2834.61, -518], runout: [-2594.79, -518.76], length: 3250 },
 ];
 
