@@ -103,6 +103,7 @@ export function buildRoad(scene, world, colliders) {
 
   const meshes = [];
   const casters = [];
+  const nearCasters = []; // { meshes, box: [x0, z0, x1, z1] }: cast shadows only when you are near
   const keep = (m, material, cast = false) => {
     m.material = material;
     m.receiveShadows = true;
@@ -228,13 +229,14 @@ export function buildRoad(scene, world, colliders) {
 
     // --- Bridges ---------------------------------------------------------------------
     // Tower Bridge has its own deck, railings and piers (towerBridge.js), so the
-    // plain bridge stops at each end of it and carries on after.
+    // plain bridge stops at each end of it (it spans all the water, so only a
+    // short stretch ashore is left at each end).
     const tower = road.towerSpan;
     for (const [r0, r1raw] of runs(n, closed, (i) => isBridge(i))) {
       // Start the structure a little before the water and end a little after.
       const b0 = Math.max(0, r0 - 6);
       const b1 = Math.min(closed ? r1raw + 6 : n - 1, r1raw + 6);
-      const pieces = tower && tower.i0 >= b0 && tower.i1 <= b1 ? [[b0, tower.i0], [tower.i1, b1]] : [[b0, b1]];
+      const pieces = (tower && tower.i0 >= b0 && tower.i1 <= b1 ? [[b0, tower.i0], [tower.i1, b1]] : [[b0, b1]]).filter(([p0, p1]) => p1 > p0);
       const deck = new GeometryBuilder();
       const walls = new GeometryBuilder();
       for (const [p0, p1] of pieces) {
@@ -273,16 +275,18 @@ export function buildRoad(scene, world, colliders) {
         pier.rotation.y = Math.atan2(f.right[0], f.right[2]);
         piers.push(pier);
       }
-      keep(deck.toMesh(`bridgeDeck_${road.id}_${r0}`, scene), concrete, true);
-      keep(walls.toMesh(`bridgeWalls_${road.id}_${r0}`, scene), road.style === "suspension" ? red : concrete, true);
+      if (deck.vertexCount) keep(deck.toMesh(`bridgeDeck_${road.id}_${r0}`, scene), concrete, true);
+      if (walls.vertexCount) keep(walls.toMesh(`bridgeWalls_${road.id}_${r0}`, scene), road.style === "suspension" ? red : concrete, true);
       if (piers.length) keep(Mesh.MergeMeshes(piers, true, true), concrete, true);
 
       if (road.style === "suspension") buildSuspension(scene, F, n, b0, b1, red, keep);
     }
-    if (tower) buildTowerBridge(scene, world, road, F, keep, colliders, { concrete });
+    // (Tower Bridge is long, so its stretches cast shadows only when you're
+    // near them: main.js adds and drops them.)
+    if (tower) nearCasters.push(...buildTowerBridge(scene, world, road, F, keep, colliders, { concrete }));
   }
 
-  return { meshes, casters };
+  return { meshes, casters, nearCasters };
 }
 
 // Two tall towers, two main cables and hanging suspenders, all bridge red.

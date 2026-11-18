@@ -108,10 +108,31 @@ function levelSpan(h, i0, i1, height, grade) {
     const at = (k) => edge + dir * k;
     // (Never reaching the ends, which join other roads at their height.)
     const room = dir < 0 ? edge - 2 : n - 3 - edge;
+    // What the blend eases into: the road as it was, except where it dips
+    // below the span and climbs back past it within 120 m (it came down off a
+    // higher bridge): there it stays level until the climb, smoothed (three
+    // passes over 34 m) so the road bends gently into the climb, with no kink.
+    // (A dip and rise just off the end would throw fast cars off the crest.)
+    const goal = Array.from({ length: room + 2 }, (_, k) => (k ? orig[at(k)] : height));
+    const back = goal[1] < height ? goal.findIndex((v, k) => k > 1 && k <= 60 && v >= height) : -1;
+    let end = 0;
+    if (back > 0) {
+      const R = 8;
+      end = Math.min(back + 3 * R, room - R);
+      for (let k = 1; k < back; k++) goal[k] = height;
+      for (let pass = 0; pass < 3; pass++) {
+        const was = goal.slice();
+        for (let k = 1; k <= end; k++) {
+          let sum = 0;
+          for (let j = k - R; j <= k + R; j++) sum += j < 0 ? height : was[j];
+          goal[k] = sum / (2 * R + 1);
+        }
+      }
+    }
     const make = (len, maxRise) => {
       const blend = [height];
-      for (let k = 1; k <= len + 1; k++) blend.push(lerp(height, orig[at(k)], smoothstep(0, len, k)));
-      for (let k = 1; k < blend.length; k++) if (Math.abs(blend[k] - blend[k - 1]) > Math.max(maxRise, k > 1 ? Math.abs(orig[at(k)] - orig[at(k - 1)]) : 0) + 1e-6) return null;
+      for (let k = 1; k <= len + 1; k++) blend.push(lerp(height, goal[k], smoothstep(0, len, k)));
+      for (let k = 1; k < blend.length; k++) if (Math.abs(blend[k] - blend[k - 1]) > Math.max(maxRise, k > 1 ? Math.abs(goal[k] - goal[k - 1]) : 0) + 1e-6) return null;
       return blend;
     };
     let blend = null;
@@ -124,6 +145,7 @@ function levelSpan(h, i0, i1, height, grade) {
       continue;
     }
     for (let k = 1; k < blend.length; k++) h[at(k)] = blend[k];
+    for (let k = blend.length; k <= end; k++) h[at(k)] = goal[k];
   }
 }
 
@@ -208,17 +230,16 @@ export class RoadNetwork {
       limitGrade(h, false, 0.085, new Set([0, n - 1]));
       // Bridges keep their deck height over the water itself.
       for (let i = 0; i < n; i++) if (bridge[i]) h[i] = Math.max(h[i], deck * 0.6);
-      // Tower Bridge: it starts a little way out from the shore at this road's
-      // start, and its deck is level from end to end.
+      // Tower Bridge: it runs over all of this road's water, from one shore to
+      // the other, and its deck is level from end to end.
       let towerSpan = null;
       const tower = TOWER_BRIDGES.find((lm) => lm.road === c.id);
       if (tower) {
-        const shore = bridge.indexOf(true);
-        const i0 = shore + Math.round(tower.from / ROAD_SAMPLE_STEP);
-        const i1 = i0 + Math.round(tower.length / ROAD_SAMPLE_STEP);
-        if (shore < 0 || i1 >= n - 1 || bridge.slice(i0, i1 + 1).includes(false)) console.warn("Tower Bridge isn't all over water", c.id, i0, i1);
+        const i0 = bridge.indexOf(true);
+        const i1 = bridge.lastIndexOf(true);
+        if (i0 < 1 || i1 >= n - 1 || bridge.slice(i0, i1 + 1).includes(false)) console.warn("Tower Bridge isn't all over water", c.id, i0, i1);
         levelSpan(h, i0, i1, BRIDGE_DECK.tower, 0.08);
-        towerSpan = { i0, i1, height: BRIDGE_DECK.tower };
+        towerSpan = { i0, i1, height: BRIDGE_DECK.tower, pairs: tower.pairs ?? 1 };
         // Its middle, for anything that wants to know where it is.
         [tower.x, tower.z] = points[Math.round((i0 + i1) / 2)];
       }

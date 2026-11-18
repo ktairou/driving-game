@@ -45,11 +45,11 @@ export const ISLANDS = [
     landmarks: [
       { type: "model", model: "bigben", name: "Big Ben", x: -228, z: 24, base: 18, size: 72, yaw: Math.PI },
       { type: "model", model: "stonehenge", name: "Stonehenge", x: -130, z: 200, base: 34, size: 34, fit: "width" },
-      // Built in code (towerBridge.js) on the road to France: it starts `from`
-      // metres out from the British shore and is `length` metres long (neither
-      // is stretched by WORLD_SCALE). x, z are only for the map label; the
-      // game puts its middle on the road itself.
-      { type: "towerBridge", name: "Tower Bridge", road: "toFrance", from: 16, length: 276, x: 839, z: 0, base: 70, plateau: false, sea: true },
+      // Built in code (towerBridge.js): it carries the road to France across
+      // the whole sea, from the British shore to the French one, with `pairs`
+      // pairs of towers along it. x, z put the map label at its middle (the
+      // game also moves them onto the road there).
+      { type: "towerBridge", name: "Tower Bridge", road: "toFrance", pairs: 3, x: 1047, z: 0, base: 70, plateau: false, sea: true },
     ],
   },
   {
@@ -163,8 +163,8 @@ export const EXTRA_ROADS = [
 
 // Roads that join Britain to the other countries. Where they cross water
 // they become bridges. The USA one is a big red suspension bridge; the road to
-// France leaves Britain through Tower Bridge (see the landmark above), then
-// carries on to France as a plain bridge.
+// France crosses the sea on Tower Bridge (see the landmark above), from shore
+// to shore.
 export const CONNECTORS = [
   // Each starts and ends on a loop road's centre line (a T-junction).
   { id: "toFrance", from: "britain", to: "france", bridge: "beam", points: [[520, -10], [640, -6], [780, 0], [1050, 0], [1320, 0], [1440, 0], [1500, 0]] },

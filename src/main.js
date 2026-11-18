@@ -222,6 +222,19 @@ async function start() {
   // Real landmark models load as you get near them.
   landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
   landmarkModels.update(SPAWN.x, SPAWN.z);
+  // Tower Bridge is nearly a kilometre long, and the shadow maps draw every
+  // caster however far off it is, so each stretch of it casts only while
+  // you're near enough for its shadow to show (checked once a second).
+  const castNear = (x, z) => {
+    for (const part of road.nearCasters) {
+      const [x0, z0, x1, z1] = part.box;
+      const near = Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(z0 - z, 0, z - z1)) < preset.shadowMaxZ + 100;
+      if (near === !!part.casting) continue;
+      part.casting = near;
+      for (const m of part.meshes) near ? csm.addShadowCaster(m, false) : csm.removeShadowCaster(m, false);
+    }
+  };
+  castNear(SPAWN.x, SPAWN.z);
 
 
   // ---------- Camera effects ----------
@@ -1027,6 +1040,7 @@ async function start() {
     if (landmarkTimer <= 0) {
       landmarkTimer = 1;
       landmarkModels.update(me.x, me.z);
+      castNear(me.x, me.z);
     }
     // Remember the time of day now and then, so it carries on next time.
     saveTimer -= dt;
