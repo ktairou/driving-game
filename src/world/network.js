@@ -1,5 +1,5 @@
 import { clamp, lerp, smoothstep } from "../noise.js";
-import { ISLANDS, CONNECTORS, EXTRA_ROADS, DRAG_STRIPS, DRAG_STRIP, ROAD_SAMPLE_STEP, BRIDGE_DECK } from "./layout.js";
+import { ISLANDS, CONNECTORS, EXTRA_ROADS, COUNTRY_ROADS, DRAG_STRIPS, DRAG_STRIP, ROAD_SAMPLE_STEP, BRIDGE_DECK } from "./layout.js";
 
 const TOWER_BRIDGES = ISLANDS.flatMap((isl) => isl.landmarks).filter((lm) => lm.type === "towerBridge");
 
@@ -199,12 +199,14 @@ export class RoadNetwork {
       this._add({ id: isl.id, island: isl.id, closed: true, points, heights: raw, bridge, drive: isl.drive, style: null });
     }
 
-    // Open roads: country roads first, then the bridges between countries.
-    // Each end joins the nearest road already built, at that road's height.
+    // Open roads: the roads inside each country first, then the bridges
+    // between countries, then the country roads (which may join any of
+    // those). Each end joins the nearest road already built, at that road's height.
     this.junctions = [];
     const open = [
       ...EXTRA_ROADS.map((r) => ({ ...r, bridgeStyle: "beam", drive: world.islandById(r.island).def.drive })),
       ...CONNECTORS.map((c) => ({ ...c, bridgeStyle: c.bridge, drive: world.islandById(c.from).def.drive })),
+      ...COUNTRY_ROADS.map((r) => ({ ...r, bridgeStyle: "beam", drive: world.islandById(r.island).def.drive, country: true })),
     ];
     for (const c of open) {
       const points = buildCurve(c.points, ROAD_SAMPLE_STEP, false);
@@ -243,7 +245,7 @@ export class RoadNetwork {
         // Its middle, for anything that wants to know where it is.
         [tower.x, tower.z] = points[Math.round((i0 + i1) / 2)];
       }
-      const road = this._add({ id: c.id, island: c.island ?? null, closed: false, points, heights: h, bridge, drive: c.drive, style: c.bridge ?? null, from: c.from, to: c.to, towerSpan });
+      const road = this._add({ id: c.id, island: c.island ?? null, closed: false, points, heights: h, bridge, drive: c.drive, style: c.bridge ?? null, from: c.from, to: c.to, towerSpan, country: !!c.country });
       if (startJ) this.junctions.push({ road, end: 0, other: startJ.road, at: startJ.at });
       if (endJ) this.junctions.push({ road, end: n - 1, other: endJ.road, at: endJ.at });
     }
@@ -320,12 +322,14 @@ export class RoadNetwork {
     ];
   }
 
-  // Nearest sample on any road built so far, if one is within 30 m.
+  // Nearest sample on any road built so far, if one is within 30 m. (The
+  // very end of an open road counts as a little further, so where two roads
+  // end at the same point on a third, a crossroads, both join the third.)
   _snap(p) {
     let best = null;
     for (const road of this.roads) {
       const at = this._nearestOn(road, p);
-      const d = Math.hypot(road.points[at][0] - p[0], road.points[at][1] - p[1]);
+      const d = Math.hypot(road.points[at][0] - p[0], road.points[at][1] - p[1]) + (!road.closed && (at === 0 || at === road.count - 1) ? 1 : 0);
       if (d < 30 && (!best || d < best.d)) best = { road, at, d };
     }
     return best;

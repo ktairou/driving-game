@@ -172,6 +172,63 @@ export const CONNECTORS = [
   { id: "toUSA", from: "britain", to: "usa", bridge: "suspension", points: [[-580, -90], [-690, -82], [-820, -60], [-1100, -30], [-1380, -8], [-1460, 0], [-1500, 0]] },
 ];
 
+// Country roads: two-lane roads that wind between the towns, up into the hills
+// and along the coasts. Unlike the roads above they are in world coordinates
+// (not stretched by WORLD_SCALE), and they are built after the bridges, so
+// each end can join any road above (a T-junction on its centre line; two
+// ending at the same point make a crossroads). Their points were checked by
+// tools/plan-roads.mjs for grades, bends and clearances.
+export const COUNTRY_ROADS = [
+  // Britain: over the southern hills from Kingsford's crossroads to the road to
+  // Egypt, on round the south-east coast to the east of the loop; a west coast
+  // road; and a road over the northern hills.
+  { id: "britainHills", island: "britain", points: [[-392.45, -322.16], [-380.92, -355.2], [-373, -412], [-354, -466], [-325, -508], [-285, -539], [-232, -563], [-177, -579], [-122, -590], [-61, -597], [-6, -600], [45, -606], [94, -623], [135, -652], [173, -689], [214, -732], [247.93, -778.38], [282.9, -779.85]] },
+  { id: "britainSouthEast", island: "britain", points: [[282.9, -779.85], [317.87, -781.33], [370, -754], [420, -728], [469, -697], [516, -666], [561, -638], [609, -609], [657, -577], [699, -541], [735, -499], [760, -450], [773, -397], [775, -342], [770, -291], [758, -237], [744, -186], [743.26, -130.61], [709.75, -120.52]] },
+  { id: "britainWest", island: "britain", points: [[-368.89, 264.6], [-401.36, 277.69], [-447, 315], [-494, 345], [-543, 366], [-589, 374], [-642, 369], [-695, 352], [-745, 326], [-789, 294], [-822, 255], [-838, 209], [-839, 164], [-825, 112], [-803, 60], [-776.77, 9.68], [-759.6, -20.82]] },
+  { id: "britainNorthHills", island: "britain", points: [[-245.6, 426.34], [-267.26, 453.83], [-310, 486], [-341, 523], [-353, 563], [-343, 603], [-317, 636], [-274, 666], [-223, 688], [-167, 703], [-110, 710], [-52, 711], [5, 706], [61, 693], [116, 674], [164, 652], [212, 624], [252, 590], [281, 552], [310.96, 516.23], [298.96, 483.35]] },
+  // France: a long road round the north and east coasts, a lane from it to
+  // Belleville, and a road through the south-west fields.
+  { id: "franceNorthCoast", island: "france", points: [[2240.65, 87.46], [2234.6, 121.93], [2253, 177], [2264, 231], [2267, 283], [2263, 329], [2252, 376], [2243, 422], [2248, 467], [2269, 509], [2305, 547], [2346, 579], [2396, 609], [2449, 636], [2503, 659], [2559, 676], [2616, 687], [2675, 693], [2729, 695], [2789, 696], [2848, 694], [2906, 689], [2962, 679], [3018, 661], [3067, 641], [3120, 614], [3172, 585], [3221, 552], [3267, 516], [3309, 474], [3346, 429], [3375, 385], [3398, 333], [3410, 280], [3411, 226], [3401, 171], [3386, 117], [3373, 69], [3361, 19], [3350, -27], [3350.69, -71.48], [3318.31, -84.75]] },
+  { id: "franceBelleville", island: "france", points: [[3190.9, 298.52], [3223.84, 310.34], [3277, 300], [3324, 296], [3373.88, 287.77], [3408.31, 294.07]] },
+  { id: "franceSouthWest", island: "france", points: [[2149.64, -188.01], [2124.43, -212.29], [2072, -305], [2068, -420], [2125, -515], [2245, -560], [2365, -535], [2456.85, -443.06], [2472.49, -411.75]] },
+  // Egypt: desert roads east from the pyramid road, one south from it, and
+  // one west past the small pyramids.
+  { id: "egyptEast", island: "egypt", points: [[-46.45, -2468.26], [-13.27, -2457.12], [43, -2460], [102, -2459], [157, -2458], [217, -2458], [271, -2459], [331, -2463], [384, -2469], [441, -2481], [492, -2496], [548, -2514], [595.29, -2538.51], [630.03, -2534.23]] },
+  { id: "egyptSouthEast", island: "egypt", points: [[251.46, -2458.77], [250.79, -2493.77], [262, -2556], [275, -2612], [296, -2672], [319, -2726], [347, -2784], [374, -2838], [404, -2896], [431, -2948], [457.1, -3008.53], [484.51, -3030.29]] },
+  { id: "egyptWest", island: "egypt", points: [[138.43, -3017.33], [110.12, -3037.91], [54, -3057], [-2, -3075], [-59, -3087], [-122, -3095], [-180, -3099], [-238, -3103], [-295, -3111], [-354.09, -3111.45], [-373.8, -3140.38]] },
+  // USA: a pass between Mount Rushmore and the Hollywood hill, a cross street
+  // north of downtown and a short ridge road south-east.
+  { id: "usaPass", island: "usa", points: [[-2624.85, -148.8], [-2653.77, -168.52], [-2760, -100], [-2880, -72], [-3000, -85], [-3120, -122], [-3230, -122], [-3296.41, -104.21], [-3330.21, -113.31]] },
+  { id: "usaMidtown", island: "usa", points: [[-2791, 129.9], [-2758.23, 142.18], [-2708, 145], [-2659, 149], [-2606, 153], [-2558, 156], [-2513, 159], [-2466.62, 153.11], [-2446.71, 181.9]] },
+  { id: "usaRidge", island: "usa", points: [[-2573.85, -252.49], [-2540.58, -241.62], [-2505, -292], [-2450, -340], [-2404.76, -387.43], [-2384.65, -416.08]] },
+];
+
+// Fuel stations: the road (by id) and the sample along it each one stands
+// beside. They were picked by searching the roads (stations.js
+// searchStations) and are frozen here, so new roads never move them.
+export const FUEL_STATIONS = [
+  { name: "Kingsford", road: "britain", index: 1696 },
+  { name: "Ashby", road: "britainEast", index: 171 },
+  { name: "Paris", road: "franceAvenue", index: 851 },
+  { name: "Belleville", road: "franceAvenue", index: 496 },
+  { name: "Al Nahr", road: "egypt", index: 381 },
+  { name: "Al Wadi", road: "egypt", index: 1836 },
+  { name: "Downtown", road: "usaSouth", index: 271 },
+  { name: "Springfield", road: "usa", index: 1066 },
+  { name: "Britain north", road: "britainNorth", index: 526 },
+  { name: "Britain west", road: "britainNorth", index: 236 },
+  { name: "Britain south", road: "britain", index: 1271 },
+  { name: "France west", road: "france", index: 1471 },
+  { name: "France south-east", road: "france", index: 806 },
+  { name: "France east", road: "france", index: 481 },
+  { name: "Egypt south", road: "egypt", index: 1101 },
+  { name: "Egypt west", road: "egypt", index: 1481 },
+  { name: "Egypt east", road: "egypt", index: 746 },
+  { name: "USA north-west", road: "usaCoast", index: 461 },
+  { name: "USA north-east", road: "usaCoast", index: 131 },
+  { name: "USA east", road: "usa", index: 101 },
+];
+
 // Drag strips: { x, z, heading, length } for each strip's start (the back of
 // its staging box), its heading (radians, like the car's) and its full length
 // in metres, in world coordinates (not stretched by WORLD_SCALE). Where the
@@ -183,21 +240,18 @@ export const CONNECTORS = [
 // The ground shaping in islands.js keeps its crags and cliffs well away from
 // them, the same as from roads.
 export const DRAG_STRIPS = [
-  { id: "britain-south-west", name: "Drag strip · Britain south-west", island: "britain", x: -258.38, z: -315.12, heading: 3.8397, length: 662, entry: "right", link: [[-318.38, -287.21], [-296.52, -309.23], [-277.37, -325.3]] },
-  { id: "britain-north", name: "Drag strip · Britain north", island: "britain", x: -397.82, z: 627.54, heading: 1.2566, length: 622, entry: "right", link: [[-256.46, 417.52], [-368.6, 602.33], [-376.33, 626.11]] },
-  { id: "france-south-west", name: "Drag strip · France south-west", island: "france", x: 2061.16, z: -273.14, heading: 2.3038, length: 702, entry: "left", link: [[2174.28, -211.41], [2098.1, -261.99], [2081.37, -280.57]] },
-  { id: "france-north-west", name: "Drag strip · France north-west", island: "france", x: 2098.03, z: 416.5, heading: 1.0472, length: 662, entry: "right", link: [[2234.76, 86.29], [2131.85, 397.92], [2119.35, 419.57]] },
-  { id: "egypt-south", name: "Drag strip · Egypt south", island: "egypt", x: 182.79, z: -3370.25, heading: 4.7473, length: 702, entry: "right", link: [[178.58, -3250.43], [163.95, -3336.57], [163.08, -3361.56]] },
-  { id: "egypt-north-east", name: "Drag strip · Egypt north-east", island: "egypt", x: 416.78, z: -2927.91, heading: 5.7945, length: 702, entry: "back", link: [[482.02, -3033.42], [444.95, -2980.89], [416.78, -2927.91]] },
-  { id: "usa-south", name: "Drag strip · USA south", island: "usa", x: -3068.79, z: -635.75, heading: 1.6057, length: 702, entry: "left", link: [[-3051.15, -497.97], [-3047.65, -603.47], [-3048.52, -628.45]] },
-  { id: "usa-west", name: "Drag strip · USA west", island: "usa", x: -3422.48, z: -78.14, heading: 0.0698, length: 622, entry: "right", link: [[-3341.34, -64.58], [-3388.17, -60.5], [-3413.11, -58.75]] },
+  { id: "britain-north-half", name: "Drag strip · Britain north", island: "britain", x: -229.2, z: 956.92, heading: 1.8151, length: 1135, entry: "right", link: [[-201.28, 694.83], [-217.77, 920.06], [-211.73, 944.32]] },
+  { id: "france-south-half", name: "Drag strip · France south", island: "france", x: 2159.85, z: -627.67, heading: 1.6057, length: 1165, entry: "left", link: [[2185.67, -547.31], [2180.99, -595.39], [2180.12, -620.37]] },
+  { id: "egypt-south-half", name: "Drag strip · Egypt south", island: "egypt", x: -450.15, z: -3398.33, heading: 1.5359, length: 1135, entry: "left", link: [[-430.88, -3096.55], [-431.31, -3364.65], [-430.44, -3389.64]] },
+  { id: "usa-south-half", name: "Drag strip · USA south", island: "usa", x: -3200.15, z: -668.33, heading: 1.5359, length: 1165, entry: "left", link: [[-3079.13, -475.35], [-3102.33, -501.56], [-3181.31, -634.65], [-3180.44, -659.64]] },
 ];
 
-// Every strip's shape (metres): a staging box, the timed quarter mile and a
+// Every strip's shape (metres): a staging box, the timed half mile and a
 // run-off to stop in, four lanes wide. `apron` is how far each side of the
 // middle the ground is levelled and kept free of trees (barriers, grandstand,
-// flags and lights stand on it).
-export const DRAG_STRIP = { stage: 40, run: 402, runoff: 260, lanes: 4, lane: 4, apron: 22 };
+// flags and lights stand on it). Where the land is tight the run-off may be
+// down to 290 m, which the fastest car was tested to stop in.
+export const DRAG_STRIP = { stage: 40, run: 805, runoff: 320, lanes: 4, lane: 4, apron: 22 };
 
 // Speed traps: a camera pole beside a long straight road and a white line
 // across it. { x, z } is a road sample (world coordinates, not stretched),
@@ -226,13 +280,16 @@ export const SPEED_TRAPS = [
 // the route runs from `start` (behind the gate, past the start grid) by way
 // of `via` to `finish`, and the other cars carry on to `runout` so they cross
 // the line at speed. `length` is the race in metres. Picked by
-// tools/plan-extras.mjs and frozen here.
+// tools/plan-extras.mjs and frozen here. (The Navigator finds the route when
+// a race starts, so two of them now take the country roads, and are shorter;
+// the Statue of Liberty race now comes to its finish from the south, so its
+// run-out was moved on past the finish that way.)
 export const STREET_RACES = [
   { id: "street-big-ben", name: "Big Ben to Stonehenge", island: "britain", x: -403.46, z: -138.36, heading: 3.0827, start: [-405.07, -108.4], via: [[721.29, -73.95]], finish: [-310.5, 364.2], runout: [-401.61, 145.39], length: 3042 },
   { id: "street-stonehenge", name: "Stonehenge to Tower Bridge", island: "britain", x: -99.1, z: 9.42, heading: -1.782, start: [-69.94, 16.47], via: [[-727.81, -310.12]], finish: [724.93, 41.47], runout: [624.44, 254.28], length: 2902 },
   { id: "street-eiffel-tower", name: "Eiffel Tower to Notre-Dame", island: "france", x: 2673.73, z: -128.8, heading: -0.0158, start: [2674.37, -158.8], via: [[3328.9, -179.3]], finish: [2515.62, -239.42], runout: [2282, -294], length: 2242 },
-  { id: "street-pyramids", name: "Pyramids to Abu Simbel", island: "egypt", x: -25.55, z: -2688.65, heading: -2.9505, start: [-19.7, -2659.23], via: [[-231.35, -3216.96]], finish: [494.67, -2230.15], runout: [286.38, -2115.73], length: 2988 },
-  { id: "street-statue-of-liberty", name: "Statue of Liberty to Mount Rushmore", island: "usa", x: -2189.8, z: 350.36, heading: -0.5859, start: [-2174.08, 324.82], via: [[-2614.96, -163.84]], finish: [-3305.57, 203.53], runout: [-3346.83, -29], length: 2644 },
+  { id: "street-pyramids", name: "Pyramids to Abu Simbel", island: "egypt", x: -25.55, z: -2688.65, heading: -2.9505, start: [-19.7, -2659.23], via: [[-231.35, -3216.96]], finish: [494.67, -2230.15], runout: [286.38, -2115.73], length: 2796 },
+  { id: "street-statue-of-liberty", name: "Statue of Liberty to Mount Rushmore", island: "usa", x: -2189.8, z: 350.36, heading: -0.5859, start: [-2174.08, 324.82], via: [[-2614.96, -163.84]], finish: [-3305.57, 203.53], runout: [-3159.38, 391.17], length: 2334 },
   { id: "street-empire-state-building", name: "Empire State Building to Hollywood sign", island: "usa", x: -2820.52, z: 310.16, heading: 0.0233, start: [-2820.64, 280.16], via: [[-2640.84, 697.27]], finish: [-2834.61, -518], runout: [-2594.79, -518.76], length: 3250 },
 ];
 
