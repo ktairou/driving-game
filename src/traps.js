@@ -3,7 +3,9 @@ import { speedLimitAt } from "./world/trafficLights.js";
 
 // Speed traps: driving over a trap's line records your speed. Your best at
 // each trap is kept (in m/s, in settings.traps), and a banner shows what you
-// did. The camera flashes if you were over the limit.
+// did. The camera flashes and takes your picture (speedPhotos.js) if you were
+// over the limit. The towns' speed cameras only do that last part: no bests,
+// credits or banner.
 
 const MIN_SPEED = 5; // m/s: crawling over the line doesn't count
 const BANNER_FOR = 3.6; // seconds
@@ -12,10 +14,13 @@ const JUMP = 6; // metres more than your speed covers in a frame: you were put t
 
 export class SpeedTraps {
   // hooks: { active() -> are you driving the car yourself, entry() -> your
-  //   garage entry, earn(oldBest, newBest) -> credits added, flash(0..1) }
-  constructor({ traps, vehicle, settings, save, hooks }) {
+  //   garage entry, earn(oldBest, newBest) -> credits added, flash(0..1),
+  //   photo(camera, speed, limit, end) (caught: `end` is which way you went, 1 or -1) }
+  // cameras: the towns' speed cameras (layout.js TOWN_CAMERAS).
+  constructor({ traps, cameras = [], vehicle, settings, save, hooks }) {
     Object.assign(this, { traps, vehicle, settings, save, hooks });
-    this.prev = new Float64Array(traps.length).fill(NaN); // how far along each trap's road you were last frame
+    this.all = [...traps, ...cameras];
+    this.prev = new Float64Array(this.all.length).fill(NaN); // how far along each camera's road you were last frame
     this.bannerTime = 0;
     this.flashTime = 0;
     const hud = document.getElementById("hud");
@@ -53,8 +58,8 @@ export class SpeedTraps {
       return;
     }
     const v = this.vehicle;
-    for (let k = 0; k < this.traps.length; k++) {
-      const t = this.traps[k];
+    for (let k = 0; k < this.all.length; k++) {
+      const t = this.all[k];
       const rx = v.x - t.x;
       const rz = v.z - t.z;
       if (Math.abs(rx) > 60 || Math.abs(rz) > 60) {
@@ -68,16 +73,20 @@ export class SpeedTraps {
       // Over the line (either way), on the road, and driven there (a slow
       // frame at speed can cover a lot of ground, so that's allowed for).
       if (Number.isNaN(p) || (p < 0) === (along < 0) || Math.abs(along - p) > JUMP + v.speed * dt * 1.5 || Math.abs(side) > ROAD_HALF_WIDTH + 2.5) continue;
-      this._pass(t, v.speed);
+      this._pass(t, v.speed, along < 0 ? -1 : 1);
     }
   }
 
-  _pass(t, speed) {
+  _pass(t, speed, end) {
     if (speed < MIN_SPEED) return;
-    if (speed * 3.6 > speedLimitAt(t.x, t.z)) {
+    // Over the limit (as the speedometer shows it): one flash and one picture a pass.
+    const limit = speedLimitAt(t.x, t.z);
+    if (Math.round(speed * 3.6) > limit) {
       this.flashTime = FLASH_FOR;
       this.hooks.flash(1);
+      this.hooks.photo?.(t, speed, limit, end);
     }
+    if (t.town) return;
     const rec = (this.settings.traps[t.id] ??= {});
     const old = rec.best ?? 0;
     // (Half a km/h better at least, so a tie on the display isn't a new best.)

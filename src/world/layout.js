@@ -221,6 +221,33 @@ export const SPEED_TRAPS = [
   { id: "trap-usa-north-2", name: "North speed trap 2", island: "usa", x: -2517.88, z: 682, heading: -1.3738, side: 1 },
 ];
 
+// Speed cameras on the towns' main streets (70 km/h): the same camera on a
+// pole as the speed traps, standing at the pavement's edge, clear of parked
+// cars, lamps, flags, bins, bus stops and side streets. They only take
+// pictures (no bests or credits). { x, z } is a main-street road sample
+// (world coordinates, already stretched), `heading` the road's direction
+// there and `side` which side of it the pole stands (1 = right). Picked from
+// the kerb spots the street furniture leaves free (streetFurniture.js) and
+// frozen here, so they never move.
+export const TOWN_CAMERAS = [
+  { id: "cam-kingsford-1", town: "Kingsford", island: "britain", x: -496.12, z: 0, heading: 1.5708, side: -1 },
+  { id: "cam-kingsford-2", town: "Kingsford", island: "britain", x: -276.12, z: 0, heading: 1.5708, side: 1 },
+  { id: "cam-ashby-1", town: "Ashby", island: "britain", x: 287.31, z: -296.8, heading: 1.5708, side: 1 },
+  { id: "cam-ashby-2", town: "Ashby", island: "britain", x: 443.31, z: -296.8, heading: 1.5708, side: -1 },
+  { id: "cam-paris-1", town: "Paris", island: "france", x: 2558.3, z: 84, heading: 1.5708, side: 1 },
+  { id: "cam-paris-2", town: "Paris", island: "france", x: 2756.3, z: 84, heading: 1.5708, side: -1 },
+  { id: "cam-belleville-1", town: "Belleville", island: "france", x: 2855.52, z: 420, heading: -1.5708, side: 1 },
+  { id: "cam-belleville-2", town: "Belleville", island: "france", x: 2925.52, z: 420, heading: -1.5708, side: -1 },
+  { id: "cam-al-nahr-1", town: "Al Nahr", island: "egypt", x: -132.67, z: -2114, heading: 1.5708, side: 1 },
+  { id: "cam-al-nahr-2", town: "Al Nahr", island: "egypt", x: 111.33, z: -2114, heading: 1.5708, side: -1 },
+  { id: "cam-al-wadi-1", town: "Al Wadi", island: "egypt", x: -431.96, z: -2694.67, heading: 1.568, side: -1 },
+  { id: "cam-al-wadi-2", town: "Al Wadi", island: "egypt", x: -365.96, z: -2694.96, heading: 1.5754, side: 1 },
+  { id: "cam-downtown-1", town: "Downtown", island: "usa", x: -2759.88, z: 462, heading: -1.5708, side: -1 },
+  { id: "cam-downtown-2", town: "Downtown", island: "usa", x: -2625.88, z: 462.02, heading: -1.5777, side: 1 },
+  { id: "cam-springfield-1", town: "Springfield", island: "usa", x: -2848.61, z: -518, heading: 1.5708, side: -1 },
+  { id: "cam-springfield-2", town: "Springfield", island: "usa", x: -2738.61, z: -518, heading: 1.5708, side: 1 },
+];
+
 // Street races, from a start gate near one landmark to a finish near another.
 // { x, z, heading } is the gate (a road sample, facing the way the race goes);
 // the route runs from `start` (behind the gate, past the start grid) by way

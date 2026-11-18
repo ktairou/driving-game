@@ -1,0 +1,180 @@
+/* ---------- Speed camera photos (speedPhotos.js) and their album (album.js) ---------- */
+
+/* The camera's flash: the whole screen white for a moment, taking no taps. */
+.snap-flash {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  opacity: 0;
+  pointer-events: none !important;
+}
+
+.snap-flash.go {
+  animation: snap-flash 0.5s ease-out;
+}
+
+@keyframes snap-flash {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* The new photo: slides in on the right, under the Photo button, clear of
+   the wheel, the pedals and the cockpit's dials, then slides out again. */
+.snap-card {
+  position: absolute;
+  top: calc(126px + var(--safe-t));
+  right: calc(14px + var(--safe-r));
+  width: 336px;
+  padding: 8px;
+  border-radius: 14px;
+  background: var(--glass-strong);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  text-align: left;
+  transform: translateX(calc(100% + 40px));
+  visibility: hidden;
+  transition: transform 0.35s ease, visibility 0s linear 0.35s;
+}
+
+.snap-card.show {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.35s ease, visibility 0s;
+}
+
+.snap-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+
+.snap-label {
+  display: block;
+  margin: 0 2px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* The album: a list, newest first. */
+.album-card {
+  width: min(600px, calc(100vw - 32px));
+}
+
+.album-list {
+  display: grid;
+  gap: 8px;
+}
+
+.album-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.album-item-open {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  text-align: left;
+}
+
+.album-item-open img {
+  flex-shrink: 0;
+  width: 144px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+
+.album-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.album-item-text b {
+  font-size: 17px;
+}
+
+.album-item-text small {
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-delete {
+  flex-shrink: 0;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* One photo, large. */
+.album-view {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.album-big {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background: #000;
+}
+
+.album-big-info {
+  margin: 12px 2px 4px;
+  font-size: 15px;
+}
+
+.album-big-info small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.album-buttons {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.album-buttons button[hidden] {
+  display: none;
+}
+
+.album-msg {
+  min-height: 1.2em;
+  margin: 8px 2px 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The way in, from Settings. */
+.album-open {
+  padding: 9px 16px;
+  border-radius: 10px;
+  background: #f3f5f7;
+  color: #11161d;
+  font-size: 14px;
+  font-weight: 700;
+}

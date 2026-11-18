@@ -4,19 +4,26 @@ import { toStation } from "./world/stations.js";
 
 // How much fuel (or battery) your car has left, and filling it up at a
 // station: you get out, walk to the pump, carry the nozzle (or charging cable)
-// to the car, fill up, put it back and get in again.
+// to the car, fill up, put it back and get in again. It runs all the way
+// down: when it's empty the engine gives nothing (main.js), and you can call
+// the road service to bring some (rescue.js).
 
-export const FUEL_FLOOR = 0.1; // it never drops below this; you just keep being told to fill up
+export const NEARLY_EMPTY = 0.1; // at or below this the gauge blinks red (and races won't start)
 const DRAIN = 1 / 500; // a full tank lasts about 12 minutes of ordinary driving
 const WALK = 1.35; // walking speed, m/s
 
 export class Fuel {
   constructor(level = 1) {
     // (A missing or broken saved value means a full tank.)
-    this.level = Number.isFinite(level) ? clamp(level, FUEL_FLOOR, 1) : 1;
+    this.level = Number.isFinite(level) ? clamp(level, 0, 1) : 1;
     this.electric = false;
     this.auto = false;
     this._warn = 0;
+    this._out = false;
+  }
+
+  get empty() {
+    return this.level <= 0;
   }
 
   // Returns a warning to show, or null.
@@ -31,15 +38,24 @@ export class Fuel {
       // next to nothing while standing still.
       const idle = this.electric ? 0.02 : 0.2;
       const use = (idle + (1 - idle) * (vehicle.throttle || 0)) * clamp((vehicle.speed || 0) / 22, 0.15, 1.6);
-      this.level = Math.max(FUEL_FLOOR, this.level - dt * use * DRAIN);
+      this.level = Math.max(0, this.level - dt * use * DRAIN);
     }
+    // Empty: said once (the screen keeps saying it, by the Call for help button).
+    if (this.level <= 0) {
+      // (No "nearly empty" warnings either while help fills it up again.)
+      this._warn = 30;
+      if (this._out) return null;
+      this._out = true;
+      return this.electric ? "Out of charge! Tap Call for help" : "Out of fuel! Tap Call for help";
+    }
+    this._out = false;
     if (this.level > 0.2) {
       this._warn = 0;
       return null;
     }
     this._warn -= dt;
     if (this._warn > 0) return null;
-    const empty = this.level <= FUEL_FLOOR + 0.001;
+    const empty = this.level <= NEARLY_EMPTY;
     this._warn = empty ? 25 : 60;
     if (this.electric) return empty ? "Battery nearly flat! Charge up at a station (see the map)" : "Battery low: charge up at a station soon";
     return empty ? "Fuel nearly empty! Fill up at a station (see the map)" : "Fuel low: fill up at a station soon";

@@ -192,7 +192,7 @@ export class Traffic {
   // they're clear of it (so a start grid can be laid out there).
   clearAround(x, z, r) {
     for (const car of this.cars) {
-      if (!car.moving || car.racing) continue;
+      if (!car.moving || car.racing || car.rescue) continue;
       for (let k = 0; k < 20 && Math.hypot(car.x - x, car.z - z) < r; k++) {
         car.prevS = car.s;
         car.s += (car.dir * 20) / ROAD_SAMPLE_STEP;
@@ -237,8 +237,9 @@ export class Traffic {
       const towed = this.cars.filter((c) => c.abandoned && Math.hypot(c.x - player.x, c.z - player.z) > 200);
       if (towed.length) this.cars = this.cars.filter((c) => !towed.includes(c));
     }
-    // (Cars in a race are driven by the race, race.js and streetRace.js.)
-    const moving = this.cars.filter((c) => c.moving && !c.racing);
+    // (Cars in a race are driven by the race, race.js and streetRace.js, and
+    // the road service truck by rescue.js.)
+    const moving = this.cars.filter((c) => c.moving && !c.racing && !c.rescue);
     for (const car of moving) {
       // Target speed: cruising, slower in towns and on bends.
       let target = inTown(car.x, car.z, 10) ? 9 : car.cruise;
@@ -410,6 +411,7 @@ export class Traffic {
     let best = null;
     let bestD = within;
     for (const c of this.cars) {
+      if (c.rescue) continue; // (the road service truck isn't yours to take)
       const fx = Math.sin(c.yaw);
       const fz = Math.cos(c.yaw);
       const reach = Math.max(0, c.type.length / 2 - 1.5);

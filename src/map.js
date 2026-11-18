@@ -38,7 +38,8 @@ function drawFuelBadge(c, x, y, r) {
   c.fillRect(x + r * 0.12, y - r * 0.2, r * 0.3, r * 0.12);
 }
 // Drag strips and street race start gates, shown as small chequered badges
-// on both maps (each has mapX, mapZ); speed traps as small camera badges.
+// on both maps (each has mapX, mapZ); speed traps as small camera badges
+// (the towns' speed cameras smaller still).
 let RACES = [];
 export function setDragStrips(list) {
   RACES = list;
@@ -271,7 +272,7 @@ export class MiniMap {
     for (const s of FUEL) drawFuelBadge(c, ...toPx(s.x, s.z), 4.5);
     for (const s of RACES) drawRaceBadge(c, ...toPx(s.mapX, s.mapZ), 4.5);
     for (const s of STREET) drawRaceBadge(c, ...toPx(s.mapX, s.mapZ), 4.5);
-    for (const t of TRAPS) drawTrapBadge(c, ...toPx(t.mapX, t.mapZ), 4);
+    for (const t of TRAPS) drawTrapBadge(c, ...toPx(t.mapX, t.mapZ), t.town ? 3 : 4);
     if (destination) {
       const [dx, dy] = toPx(destination.x, destination.z);
       c.beginPath();
@@ -400,7 +401,7 @@ export class BigMap {
     for (const s of FUEL) drawFuelBadge(c, ...screen(s.x, s.z), 9);
     for (const s of RACES) drawRaceBadge(c, ...screen(s.mapX, s.mapZ), 9);
     for (const s of STREET) drawRaceBadge(c, ...screen(s.mapX, s.mapZ), 9);
-    for (const t of TRAPS) drawTrapBadge(c, ...screen(t.mapX, t.mapZ), 8);
+    for (const t of TRAPS) drawTrapBadge(c, ...screen(t.mapX, t.mapZ), t.town ? 6 : 8);
     if (this.destination) {
       const [dx, dy] = screen(this.destination.x, this.destination.z);
       drawPin(c, dx, dy, "#e2574c");

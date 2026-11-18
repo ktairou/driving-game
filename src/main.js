@@ -22,7 +22,7 @@ import { TyreFx } from "./car/tyres.js";
 import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
 import { planStations, buildStations, stationApproach } from "./world/stations.js";
 import { LandmarkModels } from "./world/landmarkModels.js";
-import { Fuel, Refuel, pumpSpotAt, FUEL_FLOOR } from "./fuel.js";
+import { Fuel, Refuel, pumpSpotAt, NEARLY_EMPTY } from "./fuel.js";
 import { ChaseCamera, EdgeBlur } from "./camera.js";
 import { Input } from "./input.js";
 import { Weather, WEATHERS } from "./weather.js";
@@ -40,9 +40,12 @@ import { DragRace } from "./race.js";
 import { setDragStrips, setSpeedTraps, setStreetRaces } from "./map.js";
 import { planStreetRaces, buildStreetRaces } from "./world/streetRaces.js";
 import { StreetRace } from "./streetRace.js";
-import { planSpeedTraps, buildSpeedTraps } from "./world/speedtraps.js";
+import { planSpeedTraps, planTownCameras, buildSpeedTraps, cameraEye } from "./world/speedtraps.js";
 import { SpeedTraps } from "./traps.js";
 import { PhotoMode } from "./photo.js";
+import { Rescue } from "./rescue.js";
+import { SpeedPhotos } from "./speedPhotos.js";
+import { PhotoAlbum } from "./album.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,6 +134,8 @@ async function start() {
   const strips = planDragStrips(world);
   // ...and the speed traps (no trees on their poles).
   const traps = planSpeedTraps(world);
+  // ...and the towns' speed cameras (on the pavements).
+  const townCameras = planTownCameras(world);
   // ...and the street race start gates (no trees on their posts).
   const streetRaces = planStreetRaces(world);
   setProgress(0.22, "Laying the land and sea…");
@@ -144,7 +149,7 @@ async function start() {
   const landmarks = buildLandmarks(scene, world, colliders);
   const stationParts = buildStations(scene, world, colliders, stations);
   const dragParts = buildDragStrips(scene, world, colliders, strips);
-  const trapParts = buildSpeedTraps(scene, world, colliders, traps);
+  const trapParts = buildSpeedTraps(scene, world, colliders, traps, townCameras);
   const gateParts = buildStreetRaces(scene, world, colliders, streetRaces);
   const landmarkModels = new LandmarkModels(scene, world, colliders);
   const parks = buildParks(scene, world, colliders, town.parks, preset, town.lampGlow);
@@ -364,6 +369,7 @@ async function start() {
   // (Only when you're driving yourself: not self-driving, not on foot.)
   const speedTraps = new SpeedTraps({
     traps,
+    cameras: townCameras,
     vehicle,
     settings,
     save: saveSettings,
@@ -372,6 +378,8 @@ async function start() {
       entry: () => carEntry,
       flash: (k) => trapParts.flash(k),
       earn: (oldBest, newBest) => credits.earn(trapReward(oldBest, newBest)),
+      // Over the limit: the camera takes your picture (country added, as trap names repeat).
+      photo: (t, speed, limit, end) => photos.snap({ from: cameraEye(t, end), speed, limit, place: `${t.town ?? t.name}, ${world.islandById(t.island).def.name}` }),
     },
   });
   let guide = null; // { route, name, progress, x, z, race (a street race's route) }
@@ -432,6 +440,28 @@ async function start() {
     // another vehicle is loading.)
     if (mode === "fuel" || vehicle.inWater || swapping) return;
     photo.enter(mode === "foot" ? people.player : vehicle, mode === "foot" ? null : car);
+  });
+
+  // ---------- Speed camera photos ----------
+  // Taken when a speed trap or a town's speed camera catches you over the
+  // limit, and kept in the album (in Settings, or tap the new photo's card).
+  const album = new PhotoAlbum({ units: () => settings.units, deliver: (file, say) => photo.deliver(file, say), settings: () => $("settings") });
+  let cabinShown = false;
+  const photos = new SpeedPhotos(scene, {
+    subject: () => vehicle,
+    units: () => settings.units,
+    clock: () => daynight.clock,
+    shutter: () => audio.shutter(),
+    // At night the camera's flash lights the car up.
+    flash: () => 1 + 0.8 * daynight.night,
+    // From outside, your car has its windows (the Driver view takes them out).
+    before: () => {
+      cabinShown = cabin.shown;
+      cabin.setShown(false);
+    },
+    after: () => cabin.setShown(cabinShown),
+    keep: (rec) => album.add(rec),
+    open: (rec) => album.view(rec),
   });
 
   const input = new Input();
@@ -516,6 +546,35 @@ async function start() {
   };
   let nearbyCar = null;
   const refuel = new Refuel(scene, world, people);
+
+  // ---------- Out of fuel: calling for help ----------
+  // A road service truck comes along the roads and fills you up for free.
+  const rescue = new Rescue({
+    world,
+    navigator,
+    vehicle,
+    traffic,
+    fuel,
+    lights,
+    colliders,
+    hooks: {
+      kinds: { load: trafficKind, release: releaseKinds },
+      camera: () => chase.camera,
+      toast,
+      call: () => {
+        if (!fuel.empty || mode === "fuel" || photo.active) return;
+        endRaces();
+        autodriver.stop();
+        $("auto-chip").hidden = true;
+        rescue.call();
+      },
+      filled: () => {
+        settings.fuel = fuel.level;
+        saveSettings(settings);
+      },
+    },
+  });
+  let wasEmpty = fuel.empty;
   $("btn-fuel").addEventListener("click", () => {
     const at = pumpSpotAt(stations, vehicle);
     if (!at || mode !== "drive" || race.active || street.active) return;
@@ -525,6 +584,7 @@ async function start() {
     }
     autodriver.stop();
     $("auto-chip").hidden = true;
+    rescue.cancel();
     setMode("fuel");
     $("fuel-chip").hidden = false;
     refuel.start({
@@ -585,6 +645,7 @@ async function start() {
       }
       // Someone else's vehicle: the tank (or battery) is part full.
       fuel.level = 0.35 + Math.random() * 0.6;
+      rescue.cancel();
       toast(`${entry.model ? entry.name : "New car"}${fuel.electric ? " (electric)" : ""} — enjoy!`);
     }
     setMode("drive");
@@ -632,7 +693,7 @@ async function start() {
   setStreetRaces(streetRaces);
   for (const r of streetRaces) PLACES.push({ name: r.name, country: r.country, x: r.tx, z: r.tz, street: r });
   // Speed traps: picking one takes you to its line.
-  setSpeedTraps(traps);
+  setSpeedTraps([...traps, ...townCameras]);
   for (const t of traps) PLACES.push({ name: t.name, country: world.islandById(t.island).def.name, x: t.x, z: t.z, trap: t });
   // Places, a country at a time: pick a country, then its landmarks, towns or
   // fuel stations. Starts on the country you're in.
@@ -728,6 +789,10 @@ async function start() {
   });
   $("btn-drive-there").addEventListener("click", () => {
     if (!picked || mode !== "drive") return;
+    if (fuel.empty) {
+      toast(fuel.electric ? "Out of charge. Call for help first" : "Out of fuel. Call for help first");
+      return;
+    }
     guide = { ...picked, progress: 0 };
     autodriver.start(picked.route);
     $("auto-text").textContent = `Self-driving to ${picked.name}`;
@@ -763,6 +828,7 @@ async function start() {
     try {
       await swapCar(g);
       fuel.level = 1;
+      rescue.cancel();
       settings.car = g.id;
       saveSettings(settings);
     } catch (err) {
@@ -879,6 +945,8 @@ async function start() {
   onSeg("seg-fuel", (v) => {
     settings.fuelMode = v;
     fuel.auto = v === "auto";
+    // (Auto tops the tank up by itself, so help isn't needed.)
+    if (fuel.auto) rescue.cancel();
   });
   onSeg("seg-fps", (v) => (settings.showFps = v === "on"));
   onSeg("seg-sound", (v) => setSound(v === "on"));
@@ -891,7 +959,7 @@ async function start() {
 
   // ---------- Auto graphics: step down if the frame rate is low ----------
   const monitor = { warm: 6, time: 0, frames: 0, slow: 0 };
-  const anyPanelOpen = () => !panel.hidden || !mapPanel.hidden || !garagePanel.hidden || photo.active;
+  const anyPanelOpen = () => !panel.hidden || !mapPanel.hidden || !garagePanel.hidden || photo.active || album.open;
   const stepDown = () => {
     const i = LEVELS.indexOf(level);
     if (i > 0) {
@@ -955,6 +1023,13 @@ async function start() {
   let hornTimer = 0;
   const tick = (dt) => {
     input.update();
+    // Out of fuel (or being filled up by the road service): the engine gives
+    // nothing, and the self-driving gives up.
+    vehicle.engineOff = fuel.empty || rescue.holding;
+    if (fuel.empty && autodriver.active) {
+      autodriver.stop();
+      $("auto-chip").hidden = true;
+    }
     // Horn: people ahead step aside and the car in front pulls over (again
     // every so often while it's held).
     const hooting = mode === "drive" && input.horn;
@@ -1002,6 +1077,8 @@ async function start() {
     race.update(dt);
     street.update(dt);
     speedTraps.update(dt);
+    rescue.update(dt);
+    photos.update(dt);
     // Brake lights: the brake pedal, or Reverse or Gas stopping the car
     // rolling the other way (whoever is driving: you or the self-driving).
     const fwd = vehicle.forwardSpeed;
@@ -1013,6 +1090,15 @@ async function start() {
     tyres.update(dt, vehicle, 1 - 0.8 * daynight.night, weatherFx.x, mode === "drive");
     const fuelWarning = fuel.update(dt, vehicle, mode === "drive");
     if (fuelWarning) toast(fuelWarning);
+    // Just run out: remembered at once (so a reload keeps you empty), and any race is over.
+    if (fuel.empty !== wasEmpty) {
+      wasEmpty = fuel.empty;
+      if (wasEmpty) {
+        endRaces();
+        settings.fuel = 0;
+        saveSettings(settings);
+      }
+    }
     people.update(dt, mode === "drive" ? vehicle : null);
     people.draw();
     weather.update(dt, chase.camera, vehicle);
@@ -1058,7 +1144,7 @@ async function start() {
       if (country) toast(`Welcome to ${name} — drive on the ${isl.def.drive}`);
       country = name;
     }
-    audio.update(dt, { car: vehicle, onFoot: mode === "foot", inCabin: mode === "drive" && chase.modeName === "Driver" });
+    audio.update(dt, { car: vehicle, onFoot: mode === "foot", inCabin: mode === "drive" && chase.modeName === "Driver", engineOff: vehicle.engineOff });
 
     // Keep the guide line's progress marker moving.
     if (guide) {
@@ -1167,12 +1253,14 @@ async function start() {
       const gauge = $("fuel");
       gauge.classList.toggle("electric", fuel.electric);
       gauge.classList.toggle("low", fuel.level <= 0.2);
-      gauge.classList.toggle("empty", fuel.level <= FUEL_FLOOR + 0.001);
+      gauge.classList.toggle("empty", fuel.level <= NEARLY_EMPTY);
     }
     if (mode === "fuel") $("fuel-text").textContent = refuel.status;
     const fuelBtn = $("btn-fuel");
     fuelBtn.hidden = !(mode === "drive" && vehicle.speed < 0.8 && !autodriver.active && !race.active && !street.active && pumpSpotAt(stations, vehicle));
     if (!fuelBtn.hidden) fuelBtn.textContent = fuel.electric ? "Charge" : "Fill up";
+    // Out of fuel: the Call for help card (not at a pump, where Fill up shows instead).
+    rescue.hud(fuel.empty && mode !== "fuel" && fuelBtn.hidden);
     // Get out (when stopped) / Get in (next to a car).
     const action = $("btn-action");
     if (mode === "fuel") action.hidden = true;
@@ -1208,7 +1296,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, speedTraps, trapParts, street, streetRaces, gateParts, credits, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, gateParts, credits, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
   }
 }
 
