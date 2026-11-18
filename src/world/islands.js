@@ -1,5 +1,5 @@
 import { createNoise2D, fbm, smoothstep, lerp, clamp } from "../noise.js";
-import { ISLANDS, EXTRA_ROADS, CONNECTORS, DRAG_STRIPS, DRAG_STRIP, ROAD_HALF_WIDTH } from "./layout.js";
+import { ISLANDS, EXTRA_ROADS, CONNECTORS, COUNTRY_ROADS, DRAG_STRIPS, DRAG_STRIP, ROAD_HALF_WIDTH } from "./layout.js";
 import { buildCurve } from "./network.js";
 
 const CELL = 2; // physics height grid spacing in metres
@@ -13,6 +13,9 @@ const SEA_FLOOR = -24;
 // back from the road and are planned only after the land exists.
 const KEEP = 150;
 const ROAD_PAD = 45;
+// The country roads have no fuel stations, so the crags may come nearer to
+// them (from about 140 m away rather than 240 m): they keep their hills.
+const COUNTRY_PAD = -60;
 const KEEP_CELL = 10; // the distance grid behind that test
 // The grid's distances run slightly long (up to 8.3 % across diagonals, plus
 // a cell or so from sampling it), so changes start a safe margin further
@@ -20,8 +23,10 @@ const KEEP_CELL = 10; // the distance grid behind that test
 const KEEP_START = KEEP * 1.083 + 3.5 * KEEP_CELL;
 const FADE = 110;
 
-// Points every 4 m along every road in the layout (shared by all the islands).
+// Points every 4 m along every road in the layout (shared by all the
+// islands), and along the country roads.
 let roadPoints = null;
+let countryPoints = null;
 function roadSamples() {
   roadPoints ??= [
     ...ISLANDS.map((isl) => buildCurve(isl.road, 4, true)),
@@ -29,6 +34,10 @@ function roadSamples() {
     ...CONNECTORS.map((c) => buildCurve(c.points, 4, false)),
   ].flat();
   return roadPoints;
+}
+function countrySamples() {
+  countryPoints ??= COUNTRY_ROADS.flatMap((r) => buildCurve(r.points, 4, false));
+  return countryPoints;
 }
 
 // One country: its natural ground shape, plus a height grid with the roads
@@ -119,6 +128,7 @@ export class Island {
     const point = (px, pz, pad, reach = 3 * KEEP_CELL) => near(px, pz, reach, (x, z) => Math.hypot(x - px, z - pz) - pad);
     // Roads (every country's: the bridges reach across), padded for fuel stations.
     for (const [x, z] of roadSamples()) if (this._nearGrid(x, z, 3 * KEEP_CELL)) point(x, z, ROAD_PAD);
+    for (const [x, z] of countrySamples()) if (this._nearGrid(x, z, 3 * KEEP_CELL)) point(x, z, COUNTRY_PAD);
     // Towns (their parks reach a little beyond, but stay well inside the main street's padding).
     for (const t of this.def.towns) {
       near(t.cx, t.cz, Math.max(t.hx, t.hz) + 3 * KEEP_CELL, (x, z) => Math.hypot(Math.max(Math.abs(x - t.cx) - t.hx, 0), Math.max(Math.abs(z - t.cz) - t.hz, 0)));

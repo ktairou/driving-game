@@ -2,9 +2,9 @@ import { GARAGE } from "./garage.js";
 import { PLACES, TITLES, MEDALS, raceButton, raceChip, startPanel, resultCard } from "./raceUi.js";
 import { CAR_COLOURS } from "./traffic.js";
 import { DRAG_STRIPS } from "./world/layout.js";
-import { STAGE, FINISH, laneW, stripPoint, stagingAt, setLamps, drawBoard } from "./world/dragstrips.js";
+import { STAGE, FINISH, BOARD_DISTANCE, laneW, stripPoint, stagingAt, setLamps, drawBoard } from "./world/dragstrips.js";
 
-// Drag races: you against three cars over a quarter mile on a drag strip.
+// Drag races: you against three cars over a half mile on a drag strip.
 // One race at a time: idle -> (loading the other cars) -> staged ->
 // countdown -> running -> finished, then Race again or Leave.
 //
@@ -22,11 +22,11 @@ const LEVELS = {
 };
 const STEP = 1 / 120; // the same physics step as vehicle.js
 const ROLLING = 32; // rolling resistance, as in vehicle.js
-const RUN = FINISH - STAGE; // the quarter mile: 402 m
+const RUN = FINISH - STAGE; // the half mile: 805 m
 const STAGED_FOR = 1.2; // seconds lined up before the first amber
 const AMBER_GAP = 0.5;
 const PENALTY = 1; // seconds added for a false start
-const GIVE_UP = 45; // still not over the line this long after green: the race is over
+const GIVE_UP = 75; // still not over the line this long after green: the race is over (the slowest lorry takes about 40 s)
 const STOP_SHORT = 24; // everyone stops this far before the end of the run-off
 const YOU = 2; // your lane
 const THEIR_LANES = [1, 3, 4];
@@ -38,7 +38,7 @@ function accel(spec, k, v) {
   return (drive - (spec.drag ?? 0.42) * v * v - ROLLING * v) / (spec.mass ?? 1350);
 }
 
-// Seconds to cover the quarter mile from a standstill.
+// Seconds to cover the half mile from a standstill.
 function runTime(spec, k) {
   let x = 0;
   let v = 0;
@@ -53,7 +53,7 @@ function runTime(spec, k) {
   return t;
 }
 
-// The engine scale that makes another vehicle run the quarter mile in `time`.
+// The engine scale that makes another vehicle run the half mile in `time`.
 function matchEngine(spec, time) {
   let lo = 0.1;
   let hi = 10;
@@ -117,7 +117,7 @@ export class DragRace {
     this.placeEl = this.chipUi.place;
     this.panelUi = startPanel({
       title: "Drag race",
-      note: "Race three cars over a quarter mile (402 m). Wait for the green light, then go!",
+      note: "Race three cars over half a mile (805 m). Wait for the green light, then go!",
       onLevel: (v) => {
         this.level = v;
         this.settings.raceLevel = v;
@@ -211,7 +211,7 @@ export class DragRace {
     const [x, z] = stripPoint(s, STAGE - front - 0.25, laneW(YOU));
     this.hooks.place(x, z, s.heading);
     for (const ai of this.rivals) {
-      // Its engine scaled to run the quarter mile flat out as fast as yours
+      // Its engine scaled to run the half mile flat out as fast as yours
       // (times the level's slack; worked out once per level).
       ai.match[this.level] ??= matchEngine(ai.spec, this.yourRun * level.slack);
       // A little different every time.
@@ -522,6 +522,6 @@ export class DragRace {
     const last = this.lastRuns[s.id];
     const rows = last ? last.map((r) => ({ lane: r.lane, name: r.name, time: Number.isFinite(r.time) ? r.time.toFixed(2) : "--", you: r.you })) : [];
     const best = this.settings.races[s.id]?.best;
-    drawBoard(this.boardTexture, { title: shortName(s).toUpperCase(), rows, best: best ? `BEST ${fmt(best.time)}` : "QUARTER MILE · 402 m" });
+    drawBoard(this.boardTexture, { title: shortName(s).toUpperCase(), rows, best: best ? `BEST ${fmt(best.time)}` : BOARD_DISTANCE });
   }
 }

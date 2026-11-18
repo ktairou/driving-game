@@ -2,7 +2,7 @@ import { DynamicTexture, PBRMaterial, Texture, Color3 } from "@babylonjs/core";
 import { GeometryBuilder } from "../geom.js";
 import { smoothstep, lerp } from "../noise.js";
 import { inTown } from "./road.js";
-import { ISLANDS, ROAD_HALF_WIDTH } from "./layout.js";
+import { ISLANDS, ROAD_HALF_WIDTH, FUEL_STATIONS } from "./layout.js";
 import { plainMaterial, rgb } from "./materials.js";
 
 // Fuel stations: a forecourt beside the road with a canopy over an island of
@@ -30,16 +30,32 @@ const DEVICES = [
 const SPOT_U = [-3.8, 3.8];
 const BLEND = 12; // metres of ground blended from the forecourt level back to nature
 
-// Picks where the stations go (one near every town, plus three out on each
-// country's country roads) and levels the ground under them.
+// A station's frame beside sample i of a road, on the side traffic drives on.
+function siteAt(world, road, i) {
+  const def = world.islandById(road.island).def;
+  const side = def.drive === "left" ? -1 : 1;
+  const [ox, oz] = road.points[i];
+  const [tx, tz] = road.tangents[i];
+  return { road, index: i, island: def, side, ox, oz, tx, tz, nx: side * tz, nz: -side * tx, y: road.heights[i] };
+}
+
+// Puts the stations where layout.js FUEL_STATIONS froze them and levels the
+// ground under them.
 export function planStations(world) {
+  const chosen = FUEL_STATIONS.map((f) => ({ ...siteAt(world, world.network.roads.find((r) => r.id === f.road), f.index), name: `Fuel station · ${f.name}` }));
+  return placeStations(world, chosen);
+}
+
+// How the frozen spots were picked (one near every town, plus three out on
+// each country's country roads). Kept for tools that plan afresh; the game
+// itself uses the frozen list.
+export function searchStations(world) {
   const net = world.network;
   const cands = [];
   for (const road of net.roads) {
     const isl = world.islandById(road.island);
     if (!isl || road.style) continue;
     const def = isl.def;
-    const side = def.drive === "left" ? -1 : 1;
     const n = road.count;
     const at = (i) => (road.closed ? ((i % n) + n) % n : i);
     for (let i = 16; i < n - 16; i += 5) {
@@ -54,8 +70,8 @@ export function planStations(world) {
       const [ax, az] = road.tangents[at(i - 9)];
       const [bx, bz] = road.tangents[at(i + 9)];
       if (ax * bx + az * bz < 0.96 || ax * tx + az * tz < 0.98) continue; // fairly straight
-      const nx = side * tz;
-      const nz = -side * tx;
+      const site = siteAt(world, road, i);
+      const { nx, nz } = site;
       let ok = true;
       let rough = 0;
       for (let u = -PAD_U - 6; u <= PAD_U + 6 && ok; u += 4) {
@@ -71,7 +87,7 @@ export function planStations(world) {
         }
       }
       if (!ok || rough > 6) continue;
-      cands.push({ road, index: i, island: def, side, ox, oz, tx, tz, nx, nz, y, rough });
+      cands.push({ ...site, rough });
     }
   }
 
@@ -107,7 +123,10 @@ export function planStations(world) {
       chosen.push({ ...best, name });
     }
   }
+  return chosen;
+}
 
+function placeStations(world, chosen) {
   const stations = chosen.map((c, id) => {
     const s = { ...c, id };
     s.at = (u, w) => [s.ox + s.tx * u + s.nx * w, s.oz + s.tz * u + s.nz * w];

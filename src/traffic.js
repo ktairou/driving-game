@@ -74,7 +74,7 @@ export class Traffic {
     this.hold = null; // { x, z, r }: moving cars wait outside this circle (a street race's start grid)
     for (const t of types) this.addType(t);
 
-    // Junction lookup: which samples of a loop lead onto a connector.
+    // Junction lookup: which samples of a road lead onto a road that ends there.
     // (Never onto the way to a drag strip: traffic keeps off those.)
     this.junctionsByRoad = new Map();
     for (const j of world.network.junctions) {
@@ -83,11 +83,16 @@ export class Traffic {
       this.junctionsByRoad.get(j.other).push(j);
     }
 
+    // Spread evenly along all the roads laid end to end, so long roads get
+    // more cars than short ones and every road gets its share.
     const roads = world.network.roads.filter((r) => r.style !== "drag");
-    for (let k = 0; k < quality.traffic; k++) {
-      const road = roads[k % roads.length];
-      const s = this.rand() * (road.count - 1);
-      this._addMoving(road, s, this.rand() < 0.5 ? 1 : -1);
+    const total = roads.reduce((sum, r) => sum + r.count - 1, 0);
+    const gap = total / Math.max(1, quality.traffic);
+    let along = this.rand() * gap;
+    for (let k = 0; k < quality.traffic; k++, along += gap) {
+      let s = along;
+      const road = roads.find((r) => (s -= r.count - 1) < 0) ?? roads[roads.length - 1];
+      this._addMoving(road, Math.min(road.count - 1, s + road.count - 1), this.rand() < 0.5 ? 1 : -1);
     }
     this._addParked(quality.parked);
   }
@@ -331,26 +336,24 @@ export class Traffic {
   _handleEnds(car) {
     const road = car.road;
     const n = road.count;
-    if (road.closed) {
-      // Maybe turn off onto a connector at a junction we just passed.
-      const list = this.junctionsByRoad.get(road);
-      if (list) {
-        const prev = car.prevS ?? car.s;
-        for (const j of list) {
-          const w = ((car.s % n) + n) % n;
-          const pw = ((prev % n) + n) % n;
-          const crossed = car.dir > 0 ? pw < j.at && w >= j.at : pw > j.at && w <= j.at;
-          if (crossed && this.rand() < 0.35) {
-            car.road = j.road;
-            car.s = j.end;
-            car.dir = j.end === 0 ? 1 : -1;
-            return;
-          }
+    // Maybe turn off onto a road that starts or ends at a junction we just passed.
+    const list = this.junctionsByRoad.get(road);
+    if (list) {
+      const prev = car.prevS ?? car.s;
+      const w = road.closed ? ((car.s % n) + n) % n : car.s;
+      const pw = road.closed ? ((prev % n) + n) % n : prev;
+      for (const j of list) {
+        const crossed = car.dir > 0 ? pw < j.at && w >= j.at : pw > j.at && w <= j.at;
+        if (crossed && this.rand() < 0.35) {
+          car.road = j.road;
+          car.s = j.end;
+          car.dir = j.end === 0 ? 1 : -1;
+          return;
         }
       }
-      return;
     }
-    // Reached the end of a connector: join the loop at that end.
+    if (road.closed) return;
+    // Reached the end of an open road: join the road at that end.
     if (car.s < 0 || car.s > n - 1) {
       const atStart = car.s < 0;
       const j = this.world.network.junctions.find((jj) => jj.road === road && jj.end === (atStart ? 0 : n - 1));

@@ -1,39 +1,60 @@
-// Picks the sites for the drag strips by searching the land, the way
-// planStations picks fuel stations. Run it once; the sites it prints are
-// then frozen into DRAG_STRIPS in src/world/layout.js, so the strips never
-// move between versions.
+// Picks the sites for the half-mile drag strips by searching the land, the
+// way planStations picked the fuel stations. Run it once the roads are
+// final; the sites it prints are then frozen into DRAG_STRIPS in
+// src/world/layout.js, so the strips never move between versions.
 //
 //   node tools/plan-dragstrips.mjs           search and print new sites
 //   node tools/plan-dragstrips.mjs --check   report on the sites in layout.js
 //
-// A site is a dead-straight strip (staging box, quarter mile, run-off) on
-// open land, with a link road from the nearest public road into its staging
-// box (at the back, or square into one side). The aim is ground within ROUGH
-// metres of level and CLEAR metres from towns, landmarks, fuel stations and
-// other roads; Britain is too hilly and the USA too crowded for that, so the
-// search scores sites by how close they come and only rules out those beyond
-// MAX_ROUGH and MIN_CLEAR (and the run-off may be shorter, RUNOFFS). Two per
-// country, far apart. The fuel stations must come out the same as without
-// the strips: --check prints them to compare.
+// A site is a dead-straight strip (staging box, half mile, run-off) on open
+// land, with a link road from the nearest public road into its staging box
+// (at the back, or square into one side). A strip is over a kilometre long,
+// longer than half of any country, so the search allows what it must: the
+// beach (the strip is built up on a low bank there), deeper cuts and banks
+// in hilly Britain, and a run-off down to the shortest one the fastest car
+// was tested to stop in (RUNOFFS). It scores sites by how level and how
+// clear they are, takes the best in each country, and a second one where
+// there is room for another that is nearly as good, far from the first.
+//
+// It keeps clear of towns, landmarks (and the hills they stand on), fuel
+// stations, other roads, speed traps and street race start gates, by the
+// same distances tools/plan-extras.mjs used to pick those. The ground is
+// judged without the crags and sea cliffs (islands.js keeps those away from
+// a strip, so they will not be there once it is built).
 import { World } from "../src/world/world.js";
 import { planStations } from "../src/world/stations.js";
 import { inTown } from "../src/world/road.js";
 import { buildCurve } from "../src/world/network.js";
-import { ISLANDS, DRAG_STRIPS, DRAG_STRIP, ROAD_SAMPLE_STEP } from "../src/world/layout.js";
+import { ISLANDS, DRAG_STRIPS, DRAG_STRIP, ROAD_SAMPLE_STEP, SPEED_TRAPS, STREET_RACES } from "../src/world/layout.js";
 
 const CHECK = process.argv.includes("--check");
-const CLEAR = 120; // from towns, landmarks, fuel stations and other roads
-const ROUGH = 6; // most the land may differ from the strip's level height
+const CLEAR = 120; // aimed-for distance from towns, landmarks, fuel stations and other roads
+const ROUGH = 6; // aimed-for most the land may differ from the strip's level height
 const LENGTH = DRAG_STRIP.stage + DRAG_STRIP.run + DRAG_STRIP.runoff;
 const APRON = DRAG_STRIP.apron;
 const BEHIND = 60; // the link road comes in straight for this far behind the start
 const CELL = 10;
+const SHORE = 2.2; // lowest ground (m) under the strip: the beach, but not the wet sand
+const TRAP_GAP = 140; // from a speed trap to the lanes or the link road's junction (plan-extras.mjs)
+const GATE_GAP = 160; // ...and from a street race's start gate
+const FINISH_GAP = 45; // a junction this near a street race's finish line would get in its way
+const TOWER = ISLANDS.flatMap((d) => d.landmarks).find((lm) => lm.type === "towerBridge");
 
+// (A fresh search ignores the strips already frozen in layout.js.)
+if (!CHECK) DRAG_STRIPS.length = 0;
 const t0 = Date.now();
 const world = new World();
 const stations = planStations(world);
 const log = (...a) => console.error(...a);
 log(`world + stations: ${Date.now() - t0} ms`);
+
+// Points a strip must keep well away from: speed traps and race start gates
+// (with the grid behind each), by island.
+const spots = (id) => [
+  ...SPEED_TRAPS.filter((t) => t.island === id).map((t) => ({ x: t.x, z: t.z, gap: TRAP_GAP })),
+  ...STREET_RACES.filter((r) => r.island === id).flatMap((r) => [{ x: r.x, z: r.z, gap: GATE_GAP }, { x: r.start[0], z: r.start[1], gap: GATE_GAP }]),
+];
+const finishes = (id) => STREET_RACES.filter((r) => r.island === id).map((r) => r.finish);
 
 // Distance to the nearest thing a strip must keep clear of, on a coarse grid
 // per island (exact near each thing, then the minimum over all of them).
@@ -73,6 +94,8 @@ function obstacleGrid(isl, { roads = true, withStations = true, skip = null } = 
     if (lm.hill) stamp(lm.x, lm.z + (lm.hill.dz ?? 0), lm.hill.r + REACH, (x, z) => Math.hypot(x - lm.x, z - lm.z - (lm.hill.dz ?? 0)) - lm.hill.r);
   }
   if (withStations) for (const s of stations) if (s.island.id === isl.def.id) stamp(s.x, s.z, REACH + 30, (x, z) => Math.hypot(x - s.x, z - s.z) - 30);
+  // Speed traps and start gates: well beyond CLEAR, so they rule a site out.
+  for (const p of spots(isl.def.id)) stamp(p.x, p.z, p.gap + 10, (x, z) => Math.hypot(x - p.x, z - p.z) - (p.gap - 30));
   return (x, z) => {
     const i = Math.round((x - minX) / CELL);
     const j = Math.round((z - minZ) / CELL);
@@ -81,13 +104,16 @@ function obstacleGrid(isl, { roads = true, withStations = true, skip = null } = 
   };
 }
 
-// Natural ground on an 8 m grid (sampling the noise directly is too slow for the search).
+// Ground without crags or sea cliffs on an 8 m grid (sampling the noise
+// directly is too slow for the search).
 function baseGrid(isl) {
   const S = 8;
   const { minX, minZ } = isl;
   const n = Math.ceil((2 * isl.def.half) / S) + 1;
   const h = new Float32Array(n * n);
+  isl._freedom = () => 0;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) h[j * n + i] = isl.baseHeight(minX + i * S, minZ + j * S);
+  delete isl._freedom;
   return (x, z) => {
     const fx = (x - minX) / S;
     const fz = (z - minZ) / S;
@@ -105,17 +131,15 @@ function baseGrid(isl) {
 // is halfway between the lowest and highest ground under the lanes, which
 // keeps the deepest cut or fill as small as it can be. Returns that height,
 // the roughness (deepest cut or fill) under the lanes and across the whole
-// levelled apron, and the clearance from the lanes and from the apron.
-// Britain and the USA are too hilly and too crowded with roads for a
-// 700 m strip to meet ROUGH and CLEAR, so those are what the search aims
-// for (they score best), and MAX_ROUGH and MIN_CLEAR are the hard limits.
-// Where it helps, the run-off may be shorter (RUNOFFS, longest first): even
+// levelled apron, and the clearance from the lanes.
+// MAX_ROUGH and MIN_CLEAR are the hard limits (hilly Britain needs the most).
+// The run-off may be shorter where it helps (RUNOFFS, longest first): even
 // the fastest car stops in the shortest one with the brakes that come on by
-// themselves after the finish line.
-const MAX_ROUGH = 12;
+// themselves after the finish line (tested in the game).
+const MAX_ROUGH = 16;
 const MIN_CLEAR = 30;
 const MIN_APRON_CLEAR = 12;
-const RUNOFFS = [DRAG_STRIP.runoff, 220, 180];
+const RUNOFFS = [DRAG_STRIP.runoff, 290];
 function footprint(sx, sz, h, base, clear, length = LENGTH) {
   const fx = Math.sin(h);
   const fz = Math.cos(h);
@@ -129,7 +153,7 @@ function footprint(sx, sz, h, base, clear, length = LENGTH) {
       const x = sx + fx * u + fz * w;
       const z = sz + fz * u - fx * w;
       const b = base(x, z);
-      if (b < 3.5) return null; // sea or beach
+      if (b < SHORE) return null; // the water's edge or the sea
       const c = clear(x, z);
       if (Math.abs(w) <= 10) {
         minClear = Math.min(minClear, c);
@@ -142,13 +166,14 @@ function footprint(sx, sz, h, base, clear, length = LENGTH) {
   }
   const H = (lo + hi) / 2;
   const rough = (hi - lo) / 2;
-  if (rough > MAX_ROUGH) return null;
+  if (rough > MAX_ROUGH || H < 3.5) return null;
   const apronRough = Math.max(...hs.map((b) => Math.abs(b - H)));
   return { H, rough, apronRough, minClear };
 }
 
 // Road samples a link may start from: plain public roads, away from bridges,
-// junctions, towns (and their traffic lights) and fuel stations.
+// junctions, towns (and their traffic lights), fuel stations, speed traps,
+// race start gates and finishes, and Tower Bridge.
 const joinable = [];
 for (const r of world.network.roads) {
   if (r.style) continue;
@@ -156,6 +181,9 @@ for (const r of world.network.roads) {
     const [x, z] = r.points[k];
     if (r.bridge[k] || inTown(x, z, 40) || world.network.isNearMeeting(x, z, 70)) continue;
     if (stations.some((s) => Math.hypot(s.ox - x, s.oz - z) < 140 || Math.hypot(s.x - x, s.z - z) < 140)) continue;
+    if (spots(r.island).some((p) => Math.hypot(p.x - x, p.z - z) < p.gap)) continue;
+    if (finishes(r.island).some(([fx, fz]) => Math.hypot(fx - x, fz - z) < FINISH_GAP)) continue;
+    if (TOWER && Math.hypot(x - TOWER.x, z - TOWER.z) < 450) continue;
     joinable.push({ r, k, x, z });
   }
 }
@@ -247,7 +275,24 @@ function checkLink(ctrl, j, H, isl, base, roadOnly) {
 }
 
 const round = (v, k = 100) => Math.round(v * k) / k;
+
+// How near two found sites' centre lines come (sampled every 20 m).
+function apart(a, b) {
+  let best = Infinity;
+  const pts = (f) => Array.from({ length: Math.ceil(f.length / 20) + 1 }, (_, k) => [f.sx + Math.sin(f.h) * k * 20, f.sz + Math.cos(f.h) * k * 20]);
+  const pb = pts(b);
+  for (const [x, z] of pts(a)) for (const [x2, z2] of pb) best = Math.min(best, Math.hypot(x - x2, z - z2));
+  return best;
+}
 const DIRS = ["east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"];
+
+// Nearest a strip's lanes (or its link road's junction) come to a point.
+function stripGap(s, x, z) {
+  const fx = Math.sin(s.heading);
+  const fz = Math.cos(s.heading);
+  const u = Math.max(0, Math.min(s.length, (x - s.x) * fx + (z - s.z) * fz));
+  return Math.min(Math.hypot(x - (s.x + fx * u), z - (s.z + fz * u)), Math.hypot(x - s.link[0][0], z - s.link[0][1]));
+}
 
 if (CHECK) {
   // Report on the frozen sites, with the strips and links in the world.
@@ -271,14 +316,16 @@ if (CHECK) {
           fp.rough = Math.max(fp.rough, d);
           fp.minClear = Math.min(fp.minClear, clear(x, z));
         } else fp.apronClear = Math.min(fp.apronClear, clear(x, z));
-        if (base(x, z) < 3) fp.wet = true;
+        if (base(x, z) < SHORE) fp.wet = true;
       }
     }
     // Steepest stretch of the link road.
     let steep = 0;
     for (let k = 1; k < lnk.count; k++) steep = Math.max(steep, Math.abs(lnk.heights[k] - lnk.heights[k - 1]) / ROAD_SAMPLE_STEP);
     const jn = world.network.junctions.filter((j) => j.road === lnk);
-    out.push({ id: s.id, length: s.length, entry: s.entry, H: round(fp.H), rough: round(fp.rough), apronRough: round(fp.apronRough), minClear: Math.round(fp.minClear), apronClear: Math.round(fp.apronClear), wet: !!fp.wet, link: lnk.count * ROAD_SAMPLE_STEP, joins: jn.map((j) => `${j.other.id}@${j.at}`), linkSteepest: round(steep, 1000) });
+    const near = spots(s.island).map((p) => Math.round(stripGap(s, p.x, p.z) - p.gap));
+    const fin = finishes(s.island).map(([x, z]) => Math.round(Math.hypot(x - s.link[0][0], z - s.link[0][1])));
+    out.push({ id: s.id, length: s.length, entry: s.entry, H: round(fp.H), rough: round(fp.rough), apronRough: round(fp.apronRough), minClear: Math.round(fp.minClear), apronClear: Math.round(fp.apronClear), wet: !!fp.wet, link: lnk.count * ROAD_SAMPLE_STEP, joins: jn.map((j) => `${j.other.id}@${j.at}`), linkSteepest: round(steep, 1000), trapGateSpare: Math.min(...near), finishGap: Math.min(...fin) });
   }
   console.log(JSON.stringify({ strips: out, stations: stations.map((s) => [s.name, round(s.x), round(s.z), round(s.y)]) }, null, 1));
 } else {
@@ -293,7 +340,7 @@ if (CHECK) {
     const tally = { centres: 0, footprints: 0, links: 0 };
     for (let cz = def.cz - half; cz <= def.cz + half; cz += 20) {
       for (let cx = def.cx - half; cx <= def.cx + half; cx += 20) {
-        if (base(cx, cz) < 3.5 || clear(cx, cz) < MIN_CLEAR) continue;
+        if (base(cx, cz) < SHORE || clear(cx, cz) < MIN_CLEAR) continue;
         tally.centres++;
         for (let deg = 0; deg < 360; deg += 4) {
           const h = (deg * Math.PI) / 180;
@@ -307,9 +354,12 @@ if (CHECK) {
             tally.footprints++;
             const ln = link(sx, sz, h, fp.H, isl, base, roadOnly);
             if (!ln) break;
+            // The junction keeps clear of street race finishes.
+            if (finishes(def.id).some(([x, z]) => Math.hypot(x - ln.ctrl[0][0], z - ln.ctrl[0][1]) < FINISH_GAP)) break;
             tally.links++;
-            // Flat and well clear is best; a long link road or a short run-off counts against it a little.
-            const score = Math.max(0, fp.rough - ROUGH) * 1.5 + fp.rough * 0.5 + fp.apronRough * 0.3 + Math.max(0, CLEAR - fp.minClear) / 20 + ln.len / 60 + (DRAG_STRIP.runoff - runoff) / 25;
+            // Flat and well clear (of busy roads above all) is best; a long
+            // link road or a short run-off counts against it a little.
+            const score = Math.max(0, fp.rough - ROUGH) * 1.5 + fp.rough * 0.5 + fp.apronRough * 0.3 + Math.max(0, CLEAR - fp.minClear) / 10 + ln.len / 60 + (DRAG_STRIP.runoff - runoff) / 25;
             found.push({ cx, cz, sx, sz, h, length, ...fp, ln, score });
             break;
           }
@@ -317,25 +367,21 @@ if (CHECK) {
       }
     }
     log(`${def.name}: ${found.length} possible sites`, tally);
-    // Two far apart (at least 60 % of the furthest any two could be), then
-    // the best-scoring pair of those.
-    let pair = null;
+    found.sort((p, q) => p.score - q.score);
+    // The best, and a second one where there is room: well away from the
+    // first (at least 60 % of the furthest any two could be, 400 m from it at
+    // the nearest, with its own junction) and scoring nearly as well.
+    const list = found.length ? [found[0]] : [];
     let far = 0;
-    for (let a = 0; a < found.length; a++) for (let b = a + 1; b < found.length; b++) far = Math.max(far, Math.hypot(found[a].cx - found[b].cx, found[a].cz - found[b].cz));
-    for (let a = 0; a < found.length; a++) {
-      for (let b = a + 1; b < found.length; b++) {
-        const d = Math.hypot(found[a].cx - found[b].cx, found[a].cz - found[b].cz);
-        if (d < Math.max(300, far * 0.6)) continue;
-        const sc = found[a].score + found[b].score;
-        if (!pair || sc < pair.sc) pair = { sc, list: [found[a], found[b]] };
-      }
-    }
-    if (!pair && found.length) pair = { list: [found.sort((p, q) => p.score - q.score)[0]] };
-    for (const f of pair?.list ?? []) {
-      const dir = DIRS[Math.round(Math.atan2(f.cz - def.cz, f.cx - def.cx) / (Math.PI / 4) + 8) % 8];
-      chosen.push({
-        id: `${def.id}-${dir}`,
-        name: `Drag strip · ${def.name} ${dir}`,
+    for (const f of found) far = Math.max(far, Math.hypot(f.cx - found[0].cx, f.cz - found[0].cz));
+    const second = found.find((f) => Math.hypot(f.cx - found[0].cx, f.cz - found[0].cz) > Math.max(LENGTH * 0.75, far * 0.6) && apart(f, found[0]) > 400 && Math.hypot(f.ln.ctrl[0][0] - found[0].ln.ctrl[0][0], f.ln.ctrl[0][1] - found[0].ln.ctrl[0][1]) > 300 && f.score < found[0].score * 1.6 + 4);
+    if (second) list.push(second);
+    for (const f of list) {
+      let dir = DIRS[Math.round(Math.atan2(f.cz - def.cz, f.cx - def.cx) / (Math.PI / 4) + 8) % 8];
+      if (chosen.some((c) => c.id === `${def.id}-${dir}-half`)) dir += "-2";
+      const s = {
+        id: `${def.id}-${dir}-half`,
+        name: `Drag strip · ${def.name} ${dir.replace("-2", " 2")}`,
         island: def.id,
         x: round(f.sx),
         z: round(f.sz),
@@ -343,9 +389,11 @@ if (CHECK) {
         length: f.length,
         entry: f.ln.entry,
         link: f.ln.ctrl.map(([x, z]) => [round(x), round(z)]),
-        _info: { H: round(f.H), rough: round(f.rough), apronRough: round(f.apronRough), minClear: Math.round(f.minClear), link: f.ln.len, grade: round(f.ln.grade, 1000), joins: f.ln.joins, score: round(f.score) },
-      });
+      };
+      s._info = { H: round(f.H), rough: round(f.rough), apronRough: round(f.apronRough), minClear: Math.round(f.minClear), link: f.ln.len, grade: round(f.ln.grade, 1000), joins: f.ln.joins, score: round(f.score), trapGateSpare: Math.min(...spots(def.id).map((p) => Math.round(stripGap(s, p.x, p.z) - p.gap))) };
+      chosen.push(s);
     }
+    if (!list.length) log(`${def.name}: no site found`);
   }
   console.log(JSON.stringify(chosen, null, 1));
   log(`done in ${Date.now() - t0} ms`);

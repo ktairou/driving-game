@@ -113,6 +113,15 @@ export function buildRoad(scene, world, colliders) {
     return m;
   };
 
+  // The country roads (layout.js COUNTRY_ROADS) are many and short, so each
+  // country's are drawn together, one mesh per material, to save draw calls.
+  const merged = new Map();
+  const mergedFor = (road) => {
+    if (!road.country) return null;
+    if (!merged.has(road.island)) merged.set(road.island, { surf: new GeometryBuilder(), sh: new GeometryBuilder(), lines: new GeometryBuilder(), centre: new GeometryBuilder(), rail: new GeometryBuilder() });
+    return merged.get(road.island);
+  };
+
   for (const road of world.network.roads) {
     if (road.strip) continue; // a drag strip draws itself (dragstrips.js)
     const F = frames(road);
@@ -120,9 +129,11 @@ export function buildRoad(scene, world, colliders) {
     const closed = road.closed;
     const segs = closed ? n : n - 1;
     const isUSA = road.island === "usa";
+    const shared = mergedFor(road);
 
     // --- Asphalt -----------------------------------------------------------
-    const surf = new GeometryBuilder();
+    const surf = shared?.surf ?? new GeometryBuilder();
+    const base = surf.vertexCount;
     for (let i = 0; i <= segs; i++) {
       const f = F[i % n];
       const v = (i * ROAD_SAMPLE_STEP) / ASPHALT_TILE;
@@ -130,18 +141,18 @@ export function buildRoad(scene, world, colliders) {
       surf.addVertex(at(f, hw), f.n, [(2 * hw) / ASPHALT_TILE, v]);
     }
     for (let i = 0; i < segs; i++) {
-      const a = i * 2;
+      const a = base + i * 2;
       surf.addTriangle(a, a + 1, a + 3, F[i].n);
       surf.addTriangle(a, a + 3, a + 2, F[i].n);
     }
-    keep(surf.toMesh(`road_${road.id}`, scene), closed ? asphalt : asphaltTop);
+    if (!shared) keep(surf.toMesh(`road_${road.id}`, scene), closed ? asphalt : asphaltTop);
 
     // Leave gaps in paint, gravel and barriers wherever another road joins or crosses.
     const nearMeet = (i, r) => world.network.isNearMeeting(road.points[i % n][0], road.points[i % n][1], r);
     const isBridge = (i) => road.bridge[i % n];
 
     // --- Gravel shoulders with a skirt that hides any gap underneath ---------
-    const sh = new GeometryBuilder();
+    const sh = shared?.sh ?? new GeometryBuilder();
     for (let side = -1; side <= 1; side += 2) {
       for (const [r0, r1] of runs(n, closed, (i) => !onMainStreet(...road.points[i]) && !isBridge(i) && !nearMeet(i, 9))) {
         for (let k = r0; k < r1 && (closed || k + 1 < n); k++) {
@@ -155,11 +166,11 @@ export function buildRoad(scene, world, colliders) {
         }
       }
     }
-    if (sh.vertexCount) keep(sh.toMesh(`shoulders_${road.id}`, scene), gravel);
+    if (sh.vertexCount && !shared) keep(sh.toMesh(`shoulders_${road.id}`, scene), gravel);
 
     // --- Painted lines ------------------------------------------------------------
-    const lines = new GeometryBuilder();
-    const centre = new GeometryBuilder();
+    const lines = shared?.lines ?? new GeometryBuilder();
+    const centre = shared?.centre ?? new GeometryBuilder();
     const strip = (g, off, w, i, j) => {
       const f0 = F[i % n];
       const f1 = F[j % n];
@@ -177,11 +188,11 @@ export function buildRoad(scene, world, colliders) {
         strip(lines, 0, 0.14, i, i + 1); // 4 m dash, 6 m gap
       }
     }
-    if (lines.vertexCount) keep(lines.toMesh(`lines_${road.id}`, scene), white);
-    if (centre.vertexCount) keep(centre.toMesh(`centre_${road.id}`, scene), yellow);
+    if (lines.vertexCount && !shared) keep(lines.toMesh(`lines_${road.id}`, scene), white);
+    if (centre.vertexCount && !shared) keep(centre.toMesh(`centre_${road.id}`, scene), yellow);
 
     // --- Guard rails where the road sits high on a fill (on land) -------------
-    const rail = new GeometryBuilder();
+    const rail = shared?.rail ?? new GeometryBuilder();
     const railOff = hw + 1.2;
     for (let side = -1; side <= 1; side += 2) {
       const needs = F.map((f, i) => {
@@ -224,7 +235,7 @@ export function buildRoad(scene, world, colliders) {
         colliders.addSegment(a[0], a[2], b[0], b[2]);
       }
     }
-    if (rail.vertexCount) keep(rail.toMesh(`rails_${road.id}`, scene), steel, true);
+    if (rail.vertexCount && !shared) keep(rail.toMesh(`rails_${road.id}`, scene), steel, true);
 
     // --- Bridges ---------------------------------------------------------------------
     // Tower Bridge has its own deck, railings and piers (towerBridge.js), so the
@@ -280,6 +291,13 @@ export function buildRoad(scene, world, colliders) {
       if (road.style === "suspension") buildSuspension(scene, F, n, b0, b1, red, keep);
     }
     if (tower) buildTowerBridge(scene, world, road, F, keep, colliders, { concrete });
+  }
+  for (const [island, b] of merged) {
+    keep(b.surf.toMesh(`countryRoads_${island}`, scene), asphaltTop);
+    if (b.sh.vertexCount) keep(b.sh.toMesh(`countryShoulders_${island}`, scene), gravel);
+    if (b.lines.vertexCount) keep(b.lines.toMesh(`countryLines_${island}`, scene), white);
+    if (b.centre.vertexCount) keep(b.centre.toMesh(`countryCentre_${island}`, scene), yellow);
+    if (b.rail.vertexCount) keep(b.rail.toMesh(`countryRails_${island}`, scene), steel, true);
   }
 
   return { meshes, casters };

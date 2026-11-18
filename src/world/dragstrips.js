@@ -5,7 +5,7 @@ import { DRAG_STRIPS, DRAG_STRIP, ROAD_HALF_WIDTH } from "./layout.js";
 import { plainMaterial, rgb } from "./materials.js";
 
 // Drag strips: a dead-straight, dead-level run of four lanes with a staging
-// box, a quarter mile to race over and a run-off to stop in, between concrete
+// box, a half mile to race over and a run-off to stop in, between concrete
 // barriers. Positions are frozen in layout.js; the strip and its link road
 // are roads in the network (style "drag", so traffic keeps off them).
 //
@@ -16,6 +16,7 @@ import { plainMaterial, rgb } from "./materials.js";
 export const STAGE = DRAG_STRIP.stage; // the start line is this far down the strip
 export const FINISH = DRAG_STRIP.stage + DRAG_STRIP.run; // ...and the finish line this far
 export const HALF = (DRAG_STRIP.lanes * DRAG_STRIP.lane) / 2; // half the width of the lanes
+export const BOARD_DISTANCE = `1/2 MILE · ${DRAG_STRIP.run} m`; // what the timing board says before anyone has raced
 const APRON = DRAG_STRIP.apron;
 const WALL = HALF + 0.35; // inner face of the concrete barriers
 const WALL_T = 0.6;
@@ -84,13 +85,10 @@ export function planDragStrips(world) {
     // A row of flags down one side, so the strip shows from far off.
     s.flagSpots = [];
     for (let u = STAGE + 30; u < FINISH; u += 48) s.flagSpots.push(stripPoint(s, u, s.flagSide * (WALL + WALL_T + 2.2)));
-    // Four floodlights, two each side, leaning over the lanes.
-    s.floods = [
-      { u: STAGE + 6, side: s.flagSide },
-      { u: STAGE + 150, side: s.stand },
-      { u: STAGE + 290, side: s.flagSide },
-      { u: FINISH + 25, side: s.stand },
-    ];
+    // Floodlights about every 200 m down the run, from side to side, leaning over the lanes.
+    s.floods = [];
+    for (let k = 0, u = STAGE + 6; u < FINISH; k++, u += (FINISH - STAGE) / 4) s.floods.push({ u: Math.round(u), side: k % 2 ? s.stand : s.flagSide });
+    s.floods.push({ u: FINISH + 25, side: s.floods.length % 2 ? s.stand : s.flagSide });
     s.signs = signSpots(world, s);
   }
   world.clearAreas = (world.clearAreas ?? []).concat(
@@ -337,7 +335,7 @@ export function buildDragStrips(scene, world, colliders, strips) {
   board.disableLighting = true;
   board.diffuseColor = new Color3(0, 0, 0); // (only the picture itself shows)
   board.emissiveTexture = boardTexture;
-  drawBoard(boardTexture, { title: "QUARTER MILE · 402 m", rows: [], best: "" });
+  drawBoard(boardTexture, { title: BOARD_DISTANCE, rows: [], best: "" });
   mats.board = board;
   // Start lights: unlit, each lamp's own colour (set per lamp) is what you see.
   const lampMat = new StandardMaterial("dragLampMat", scene);

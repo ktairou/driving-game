@@ -19,6 +19,10 @@ const KEY = "drivingGame.settings.v1";
 // drive (the switch in Settings).
 const DEFAULTS = { graphics: "auto", units: "kmh", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real", races: {}, raceLevel: "medium", traps: {}, credits: 0, unlocked: null, unlockAll: false };
 
+// The quarter-mile drag strips, since replaced by half-mile strips with ids
+// of their own: their results no longer mean anything, so they are dropped.
+const RETIRED_STRIPS = ["britain-south-west", "britain-north", "france-south-west", "france-north-west", "egypt-south", "egypt-north-east", "usa-south", "usa-west"];
+
 // (Its own copy of a saved object, or a fresh one if what was saved is broken.)
 const own = (v) => (v && typeof v === "object" && !Array.isArray(v) ? { ...v } : {});
 
@@ -27,6 +31,7 @@ export function loadSettings() {
     const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
     const settings = { ...DEFAULTS, ...saved };
     settings.races = own(settings.races);
+    for (const id of RETIRED_STRIPS) delete settings.races[id];
     settings.traps = own(settings.traps);
     settings.credits = Number.isFinite(saved.credits) && saved.credits > 0 ? Math.floor(saved.credits) : 0;
     settings.unlockAll = saved.unlockAll === true;
