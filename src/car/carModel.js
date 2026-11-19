@@ -462,5 +462,5 @@ export async function loadVehicleLod(scene, id) {
   mesh.name = `traffic_${id}`;
   gltfRoot.dispose();
   mesh.isPickable = false;
-  return { mesh, lights, length: max.z - min.z, halfWidth: (max.x - min.x) / 2, centreZ: (min.z + max.z) / 2, tailLamps };
+  return { mesh, lights, length: max.z - min.z, halfWidth: (max.x - min.x) / 2, height: max.y, centreZ: (min.z + max.z) / 2, tailLamps };
 }
