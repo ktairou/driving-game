@@ -11,6 +11,7 @@ export const CAR_COLOURS = [
 ];
 
 const DRAW_RANGE = 480; // cars further than this from the camera aren't drawn
+const UNPAINTED = [1, 1, 1]; // (a colour multiplies a vehicle's own colours: white leaves them be)
 
 // Which vehicles drive about, and how common each one is. "more" ones only
 // on the High graphics setting (each kind costs graphics memory). Parked
@@ -120,6 +121,16 @@ export class Traffic {
 
   type(id) {
     return this.types.find((t) => t.id === id);
+  }
+
+  // Lets the racing cars of one kind each have their own colour from now on
+  // (two of the same in a drag race). The colour multiplies the vehicle's own
+  // colours; any others of that kind are drawn as they are.
+  colourable(id) {
+    const t = this.type(id);
+    if (!t || t.colours) return;
+    t.colours = new Float32Array(this.maxInstances * 4);
+    t.mesh.thinInstanceSetBuffer("color", t.colours, 4, false);
   }
 
   _pickType(parked) {
@@ -319,9 +330,10 @@ export class Traffic {
       m.copyToArray(t.matrices, t.count * 16);
       if (t.colours) {
         const o = t.count * 4;
-        t.colours[o] = car.colour[0];
-        t.colours[o + 1] = car.colour[1];
-        t.colours[o + 2] = car.colour[2];
+        const c = t.coloured || car.racing ? car.colour : UNPAINTED;
+        t.colours[o] = c[0];
+        t.colours[o + 1] = c[1];
+        t.colours[o + 2] = c[2];
         t.colours[o + 3] = 1;
       }
       t.count++;

@@ -5,7 +5,8 @@ import { price } from "./garage.js";
 // `credits`, `unlocked` (ids you own) and `unlockAll` (the Settings switch).
 
 // What each place pays, before the level's share (Easy x1, Medium x1.5, Hard x2.5).
-const PLACE_PAY = { drag: [100, 50, 25, 10], street: [300, 150, 75, 25] };
+// (Drag races have six cars: a little even for the back of the field.)
+const PLACE_PAY = { drag: [100, 50, 25, 10, 5, 2], street: [300, 150, 75, 25] };
 const LEVEL_PAY = { easy: 1, medium: 1.5, hard: 2.5 };
 
 // Credits for finishing a race in `place` (0 = first) at `level`.

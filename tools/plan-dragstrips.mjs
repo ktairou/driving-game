@@ -5,6 +5,9 @@
 //
 //   node tools/plan-dragstrips.mjs           search and print new sites
 //   node tools/plan-dragstrips.mjs --check   report on the sites in layout.js
+//   node tools/plan-dragstrips.mjs --only britain   search one country alone
+//       and take only its best site (to move one strip that no longer fits;
+//       freeze it under the old strip's id, so saved bests carry over)
 //
 // A site is a dead-straight strip (staging box, half mile, run-off) on open
 // land, with a link road from the nearest public road into its staging box
@@ -28,10 +31,13 @@ import { buildCurve } from "../src/world/network.js";
 import { ISLANDS, DRAG_STRIPS, DRAG_STRIP, ROAD_SAMPLE_STEP, SPEED_TRAPS, STREET_RACES } from "../src/world/layout.js";
 
 const CHECK = process.argv.includes("--check");
+const ONLY = process.argv.includes("--only") ? process.argv[process.argv.indexOf("--only") + 1] : null;
 const CLEAR = 120; // aimed-for distance from towns, landmarks, fuel stations and other roads
 const ROUGH = 6; // aimed-for most the land may differ from the strip's level height
 const LENGTH = DRAG_STRIP.stage + DRAG_STRIP.run + DRAG_STRIP.runoff;
 const APRON = DRAG_STRIP.apron;
+const HALF = (DRAG_STRIP.lanes * DRAG_STRIP.lane) / 2; // half the width of the lanes
+const LANES_W = HALF + 2; // ...and a little beyond: the ground judged as under the lanes
 const BEHIND = 60; // the link road comes in straight for this far behind the start
 const CELL = 10;
 const SHORE = 2.2; // lowest ground (m) under the strip: the beach, but not the wet sand
@@ -128,7 +134,8 @@ function baseGrid(isl) {
 }
 
 // The footprint of a strip starting at (sx, sz) heading h. Its level height
-// is halfway between the lowest and highest ground under the lanes, which
+// is halfway between the lowest and highest ground under the lanes (about:
+// network.js stripHeight samples 10 m each side of the middle), which
 // keeps the deepest cut or fill as small as it can be. Returns that height,
 // the roughness (deepest cut or fill) under the lanes and across the whole
 // levelled apron, and the clearance from the lanes.
@@ -149,13 +156,13 @@ function footprint(sx, sz, h, base, clear, length = LENGTH) {
   let apronClear = Infinity;
   const hs = [];
   for (let u = -10; u <= length + 10; u += 15) {
-    for (const w of [-APRON, -10, 0, 10, APRON]) {
+    for (const w of [-APRON, -LANES_W, -10, 0, 10, LANES_W, APRON]) {
       const x = sx + fx * u + fz * w;
       const z = sz + fz * u - fx * w;
       const b = base(x, z);
       if (b < SHORE) return null; // the water's edge or the sea
       const c = clear(x, z);
-      if (Math.abs(w) <= 10) {
+      if (Math.abs(w) <= LANES_W) {
         minClear = Math.min(minClear, c);
         lo = Math.min(lo, b);
         hi = Math.max(hi, b);
@@ -200,8 +207,8 @@ function link(sx, sz, h, H, isl, base, roadOnly) {
   const ends = [{ entry: "back", end: [sx, sz], dx: fx, dz: fz }];
   for (const [entry, side] of [["left", -1], ["right", 1]]) {
     // right of the strip = (fz, -fx)
-    const ex = sx + fx * (DRAG_STRIP.stage / 2) + fz * side * 8;
-    const ez = sz + fz * (DRAG_STRIP.stage / 2) - fx * side * 8;
+    const ex = sx + fx * (DRAG_STRIP.stage / 2) + fz * side * HALF;
+    const ez = sz + fz * (DRAG_STRIP.stage / 2) - fx * side * HALF;
     ends.push({ entry, end: [ex, ez], dx: -fz * side, dz: fx * side });
   }
   let best = null;
@@ -291,7 +298,7 @@ function stripGap(s, x, z) {
   const fx = Math.sin(s.heading);
   const fz = Math.cos(s.heading);
   const u = Math.max(0, Math.min(s.length, (x - s.x) * fx + (z - s.z) * fz));
-  return Math.min(Math.hypot(x - (s.x + fx * u), z - (s.z + fz * u)), Math.hypot(x - s.link[0][0], z - s.link[0][1]));
+  return Math.min(Math.hypot(x - (s.x + fx * u), z - (s.z + fz * u)) - HALF, Math.hypot(x - s.link[0][0], z - s.link[0][1]));
 }
 
 if (CHECK) {
@@ -312,7 +319,7 @@ if (CHECK) {
         const z = s.z + fz * u - fx * w;
         const d = Math.abs(base(x, z) - fp.H);
         fp.apronRough = Math.max(fp.apronRough, d);
-        if (Math.abs(w) <= 11) {
+        if (Math.abs(w) <= LANES_W + 1) {
           fp.rough = Math.max(fp.rough, d);
           fp.minClear = Math.min(fp.minClear, clear(x, z));
         } else fp.apronClear = Math.min(fp.apronClear, clear(x, z));
@@ -325,12 +332,16 @@ if (CHECK) {
     const jn = world.network.junctions.filter((j) => j.road === lnk);
     const near = spots(s.island).map((p) => Math.round(stripGap(s, p.x, p.z) - p.gap));
     const fin = finishes(s.island).map(([x, z]) => Math.round(Math.hypot(x - s.link[0][0], z - s.link[0][1])));
-    out.push({ id: s.id, length: s.length, entry: s.entry, H: round(fp.H), rough: round(fp.rough), apronRough: round(fp.apronRough), minClear: Math.round(fp.minClear), apronClear: Math.round(fp.apronClear), wet: !!fp.wet, link: lnk.count * ROAD_SAMPLE_STEP, joins: jn.map((j) => `${j.other.id}@${j.at}`), linkSteepest: round(steep, 1000), trapGateSpare: Math.min(...near), finishGap: Math.min(...fin) });
+    // Would the search still take this site, as it is now (the same test it
+    // makes of every site, on the ground without crags)?
+    const fits = footprint(s.x, s.z, s.heading, baseGrid(isl), clear, s.length);
+    out.push({ fits: !!fits, id: s.id, length: s.length, entry: s.entry, H: round(fp.H), rough: round(fp.rough), apronRough: round(fp.apronRough), minClear: Math.round(fp.minClear), apronClear: Math.round(fp.apronClear), wet: !!fp.wet, link: lnk.count * ROAD_SAMPLE_STEP, joins: jn.map((j) => `${j.other.id}@${j.at}`), linkSteepest: round(steep, 1000), trapGateSpare: Math.min(...near), finishGap: Math.min(...fin) });
   }
   console.log(JSON.stringify({ strips: out, stations: stations.map((s) => [s.name, round(s.x), round(s.z), round(s.y)]) }, null, 1));
 } else {
   const chosen = [];
   for (const def of ISLANDS) {
+    if (ONLY && def.id !== ONLY) continue;
     const isl = world.islandById(def.id);
     const base = baseGrid(isl);
     const clear = obstacleGrid(isl);
@@ -375,7 +386,8 @@ if (CHECK) {
     let far = 0;
     for (const f of found) far = Math.max(far, Math.hypot(f.cx - found[0].cx, f.cz - found[0].cz));
     const second = found.find((f) => Math.hypot(f.cx - found[0].cx, f.cz - found[0].cz) > Math.max(LENGTH * 0.75, far * 0.6) && apart(f, found[0]) > 400 && Math.hypot(f.ln.ctrl[0][0] - found[0].ln.ctrl[0][0], f.ln.ctrl[0][1] - found[0].ln.ctrl[0][1]) > 300 && f.score < found[0].score * 1.6 + 4);
-    if (second) list.push(second);
+    if (second && !ONLY) list.push(second);
+    if (ONLY) for (const f of found.slice(0, 8)) log(`  score ${round(f.score)} centre ${Math.round(f.cx)},${Math.round(f.cz)} heading ${round(f.h, 1e3)} rough ${round(f.rough)} minClear ${Math.round(f.minClear)} link ${f.ln.len}`);
     for (const f of list) {
       let dir = DIRS[Math.round(Math.atan2(f.cz - def.cz, f.cx - def.cx) / (Math.PI / 4) + 8) % 8];
       if (chosen.some((c) => c.id === `${def.id}-${dir}-half`)) dir += "-2";

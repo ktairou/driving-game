@@ -237,21 +237,25 @@ export const FUEL_STATIONS = [
 // meets the strip: the back of the staging box (`entry: "back"`) or the
 // middle of one side of it ("left" / "right", seen driving down the strip).
 // Picked by tools/plan-dragstrips.mjs and frozen here, so they never move.
-// The ground shaping in islands.js keeps its crags and cliffs well away from
-// them, the same as from roads.
+// When the strips went from four lanes to six, Britain's no longer fitted
+// (its wider apron reached the wet sand) and was planned again: the same
+// ground, run the other way, with a new link road. The others kept their
+// place; only each link road's last two points moved, 4 m out to the wider
+// strip's edge. The ground shaping in islands.js keeps its crags and cliffs
+// well away from them, the same as from roads.
 export const DRAG_STRIPS = [
-  { id: "britain-north-half", name: "Drag strip · Britain north", island: "britain", x: -229.2, z: 956.92, heading: 1.8151, length: 1135, entry: "right", link: [[-201.28, 694.83], [-217.77, 920.06], [-211.73, 944.32]] },
-  { id: "france-south-half", name: "Drag strip · France south", island: "france", x: 2159.85, z: -627.67, heading: 1.6057, length: 1165, entry: "left", link: [[2185.67, -547.31], [2180.99, -595.39], [2180.12, -620.37]] },
-  { id: "egypt-south-half", name: "Drag strip · Egypt south", island: "egypt", x: -450.15, z: -3398.33, heading: 1.5359, length: 1135, entry: "left", link: [[-430.88, -3096.55], [-431.31, -3364.65], [-430.44, -3389.64]] },
-  { id: "usa-south-half", name: "Drag strip · USA south", island: "usa", x: -3200.15, z: -668.33, heading: 1.5359, length: 1165, entry: "left", link: [[-3079.13, -475.35], [-3102.33, -501.56], [-3181.31, -634.65], [-3180.44, -659.64]] },
+  { id: "britain-north-half", name: "Drag strip · Britain north", island: "britain", x: 881.2, z: 675.08, heading: 4.9567, length: 1135, entry: "left", link: [[603.81, 273.21], [852.84, 644.02], [858.89, 668.28]] },
+  { id: "france-south-half", name: "Drag strip · France south", island: "france", x: 2159.85, z: -627.67, heading: 1.6057, length: 1165, entry: "left", link: [[2185.67, -547.31], [2181.13, -591.39], [2180.26, -616.37]] },
+  { id: "egypt-south-half", name: "Drag strip · Egypt south", island: "egypt", x: -450.15, z: -3398.33, heading: 1.5359, length: 1135, entry: "left", link: [[-430.88, -3096.55], [-431.45, -3360.65], [-430.58, -3385.64]] },
+  { id: "usa-south-half", name: "Drag strip · USA south", island: "usa", x: -3200.15, z: -668.33, heading: 1.5359, length: 1165, entry: "left", link: [[-3079.13, -475.35], [-3102.33, -501.56], [-3181.45, -630.65], [-3180.58, -655.64]] },
 ];
 
 // Every strip's shape (metres): a staging box, the timed half mile and a
-// run-off to stop in, four lanes wide. `apron` is how far each side of the
+// run-off to stop in, six lanes wide. `apron` is how far each side of the
 // middle the ground is levelled and kept free of trees (barriers, grandstand,
 // flags and lights stand on it). Where the land is tight the run-off may be
 // down to 290 m, which the fastest car was tested to stop in.
-export const DRAG_STRIP = { stage: 40, run: 805, runoff: 320, lanes: 4, lane: 4, apron: 22 };
+export const DRAG_STRIP = { stage: 40, run: 805, runoff: 320, lanes: 6, lane: 4, apron: 26 };
 
 // Speed traps: a camera pole beside a long straight road and a white line
 // across it. { x, z } is a road sample (world coordinates, not stretched),

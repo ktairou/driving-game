@@ -4,18 +4,19 @@ import { smoothstep, lerp, clamp, mulberry32 } from "../noise.js";
 import { DRAG_STRIPS, DRAG_STRIP, ROAD_HALF_WIDTH } from "./layout.js";
 import { plainMaterial, rgb } from "./materials.js";
 
-// Drag strips: a dead-straight, dead-level run of four lanes with a staging
+// Drag strips: a dead-straight, dead-level run of six lanes with a staging
 // box, a half mile to race over and a run-off to stop in, between concrete
 // barriers. Positions are frozen in layout.js; the strip and its link road
 // are roads in the network (style "drag", so traffic keeps off them).
 //
 // Each strip has its own frame: u runs down the strip from the back of the
 // staging box, w across it (to the right, seen driving down it). Lanes are
-// numbered 1 to 4 from the left. Heights are above the strip's level.
+// numbered 1 to 6 from the left. Heights are above the strip's level.
 
 export const STAGE = DRAG_STRIP.stage; // the start line is this far down the strip
 export const FINISH = DRAG_STRIP.stage + DRAG_STRIP.run; // ...and the finish line this far
-export const HALF = (DRAG_STRIP.lanes * DRAG_STRIP.lane) / 2; // half the width of the lanes
+export const LANES = DRAG_STRIP.lanes;
+export const HALF = (LANES * DRAG_STRIP.lane) / 2; // half the width of the lanes
 export const BOARD_DISTANCE = `1/2 MILE · ${DRAG_STRIP.run} m`; // what the timing board says before anyone has raced
 const APRON = DRAG_STRIP.apron;
 const WALL = HALF + 0.35; // inner face of the concrete barriers
@@ -174,16 +175,17 @@ function signSpots(world, s) {
 
 const FONT = "Segoe UI, Helvetica, Arial, sans-serif";
 
-// Lane numbers 1 to 4, side by side, white on clear.
+// Lane numbers 1 to 6, side by side in 64 px squares, white on clear.
+const NUMBERS_W = 512;
 function numbersTexture(scene) {
-  const t = new DynamicTexture("dragNumbers", { width: 256, height: 64 }, scene, true);
+  const t = new DynamicTexture("dragNumbers", { width: NUMBERS_W, height: 64 }, scene, true);
   const c = t.getContext();
-  c.clearRect(0, 0, 256, 64);
+  c.clearRect(0, 0, NUMBERS_W, 64);
   c.fillStyle = "#ffffff";
   c.font = `bold 56px ${FONT}`;
   c.textAlign = "center";
   c.textBaseline = "middle";
-  for (let k = 0; k < 4; k++) c.fillText(String(k + 1), 32 + k * 64, 34);
+  for (let k = 0; k < LANES; k++) c.fillText(String(k + 1), 32 + k * 64, 34);
   t.hasAlpha = true;
   t.update();
   return t;
@@ -266,24 +268,25 @@ export function drawBoard(texture, { title, rows, best }) {
   c.lineWidth = 6;
   c.strokeRect(3, 3, BOARD_W - 6, BOARD_H - 6);
   c.textBaseline = "middle";
-  c.font = `bold 30px ${FONT}`;
+  c.font = `bold 26px ${FONT}`;
   c.fillStyle = "#ffffff";
   c.textAlign = "center";
-  c.fillText(title, BOARD_W / 2, 30);
-  c.font = `bold 34px ${FONT}`;
+  c.fillText(title, BOARD_W / 2, 26);
+  // (Six rows, one a lane, between the title and the best time.)
+  c.font = `bold 27px ${FONT}`;
   rows.forEach((r, i) => {
-    const y = 76 + i * 40;
+    const y = 60 + i * 29;
     c.fillStyle = r.you ? "#ffd23f" : "#ff9a2e";
     c.textAlign = "left";
     c.fillText(String(r.lane), 28, y);
-    c.fillText(r.name, 70, y);
+    c.fillText(r.name, 64, y);
     c.textAlign = "right";
     c.fillText(r.time, BOARD_W - 28, y);
   });
-  c.font = `bold 30px ${FONT}`;
+  c.font = `bold 23px ${FONT}`;
   c.fillStyle = "#7ee0a5";
   c.textAlign = "center";
-  c.fillText(best, BOARD_W / 2, BOARD_H - 24);
+  c.fillText(best, BOARD_W / 2, BOARD_H - 16);
   texture.update();
 }
 
@@ -406,7 +409,8 @@ export function buildDragStrips(scene, world, colliders, strips) {
     // --- The surface and its paint ---
     for (let u = 0; u < L; u += 20) flat(mats.asphalt, u, Math.min(L, u + 20), -outer, outer, LIFT);
     for (const side of [-1, 1]) flat(mats.paint, 0, L, side * (HALF - 0.3), side * (HALF - 0.15), PAINT, [[0, 0], [0, 1], [1, 1], [1, 0]]);
-    for (const w of [-4, 0, 4]) {
+    for (let k = 1; k < LANES; k++) {
+      const w = -HALF + k * DRAG_STRIP.lane;
       // Solid between the lanes from the back of the staging box to the finish, dashed after.
       flat(mats.paint, 0, FINISH, w - 0.07, w + 0.07, PAINT, [[0, 0], [0, 1], [1, 1], [1, 0]]);
       for (let u = FINISH + 6; u < L - 4; u += 9) flat(mats.paint, u, u + 3, w - 0.07, w + 0.07, PAINT, [[0, 0], [0, 1], [1, 1], [1, 0]]);
@@ -422,14 +426,14 @@ export function buildDragStrips(scene, world, colliders, strips) {
       }
     }
     // Lane numbers just behind the start line, reading down the strip.
-    for (let lane = 1; lane <= 4; lane++) {
+    for (let lane = 1; lane <= LANES; lane++) {
       const w = laneW(lane);
-      const a = (lane - 1) / 4;
-      const b = lane / 4;
+      const a = ((lane - 1) * 64) / NUMBERS_W;
+      const b = (lane * 64) / NUMBERS_W;
       flat(mats.numbers, STAGE - 10, STAGE - 5, w - 1.25, w + 1.25, PAINT + 0.002, [[a, 0], [a, 1], [b, 1], [b, 0]]);
     }
     // Burnt rubber where the cars set off, two tracks a lane.
-    for (let lane = 1; lane <= 4; lane++) {
+    for (let lane = 1; lane <= LANES; lane++) {
       for (const t of [-0.8, 0.8]) {
         const w = laneW(lane) + t;
         flat(mats.rubber, STAGE - 3, STAGE + 85, w - 0.17, w + 0.17, PAINT + 0.003, [[0, 0], [0, 1], [1, 1], [1, 0]]);
@@ -484,10 +488,15 @@ export function buildDragStrips(scene, world, colliders, strips) {
     };
     gantry(TREE_U);
     gantry(FINISH);
-    // The start lights hang from the middle of their gantry, facing the start line.
-    box(mats.dark, TREE_U - 0.15, TREE_U + 0.15, 3.95, GANTRY_Y, -0.58, 0.58, 1);
+    // The start lights hang from their gantry facing the start line, one
+    // set over each line between a pair of lanes: a column of lamps for each
+    // lane, the left lane's on the left. (The lamps stand 12 cm proud of
+    // their housing, like the timing board from its backing.)
     const lamps = [];
-    for (const [col, w] of [[0, -0.28], [1, 0.28]]) {
+    for (let lane = 1; lane <= LANES; lane++) {
+      const line = -HALF + DRAG_STRIP.lane * (lane % 2 ? lane : lane - 1);
+      if (lane % 2) box(mats.dark, TREE_U - 0.05, TREE_U + 0.15, 3.95, GANTRY_Y, line - 0.58, line + 0.58, 1);
+      const w = line + (lane % 2 ? -0.28 : 0.28);
       LAMP_ROWS.forEach((_, row) => {
         const [x, z] = stripPoint(s, TREE_U - 0.17, w);
         lamps.push(Matrix.Compose(Vector3.One(), Quaternion.RotationYawPitchRoll(s.heading, 0, 0), new Vector3(x, s.height + 6.25 - row * 0.5, z)));
@@ -506,7 +515,9 @@ export function buildDragStrips(scene, world, colliders, strips) {
     meshes.push(lampMesh);
     s.lampMesh = lampMesh;
     // The timing board, readable from both sides.
-    box(mats.dark, FINISH - 0.2, FINISH + 0.2, GANTRY_Y + 0.5, GANTRY_Y + 3.3, -4.7, 4.7, 1);
+    // (Its dark backing stands well back from both faces: 2 cm behind, it
+    // showed through parts of the board on USA south's strip.)
+    box(mats.dark, FINISH - 0.1, FINISH + 0.1, GANTRY_Y + 0.5, GANTRY_Y + 3.3, -4.7, 4.7, 1);
     const bw = 4.5;
     const by0 = GANTRY_Y + 0.6;
     const by1 = GANTRY_Y + 3.2;
@@ -584,15 +595,17 @@ export function buildDragStrips(scene, world, colliders, strips) {
   return { meshes, casters, lampSpots, boardTexture, setLamps };
 }
 
-// Lights one strip's start lights. `left` and `right` (lanes 1-2 and 3-4)
-// are { amber: 0-3 (which one is lit), green, red }, or null for all off.
-export function setLamps(s, left, right) {
+// Lights one strip's start lights: `yours` over lane `lane` and `others`
+// over every other lane, each { amber: 0-3 (which one is lit), green, red },
+// or null for all off.
+export function setLamps(s, yours, others, lane = 0) {
   if (!s.lampColours) return;
-  [left, right].forEach((side, col) => {
+  for (let l = 1; l <= LANES; l++) {
+    const side = l === lane ? yours : others;
     LAMP_ROWS.forEach((name, row) => {
       const on = !!side && (name === "amber" ? side.amber === row + 1 : side[name]);
-      s.lampColours.set([...LAMP[name][on ? "on" : "off"], 1], (col * LAMP_ROWS.length + row) * 4);
+      s.lampColours.set([...LAMP[name][on ? "on" : "off"], 1], ((l - 1) * LAMP_ROWS.length + row) * 4);
     });
-  });
+  }
   s.lampMesh.thinInstanceBufferUpdated("color");
 }

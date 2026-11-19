@@ -5,8 +5,8 @@ import "./race.css";
 // the start panel with its level picker, and the result card with its medal.
 
 export const LEVEL_NAMES = { easy: "Easy", medium: "Medium", hard: "Hard" };
-export const PLACES = ["1st", "2nd", "3rd", "4th"];
-export const TITLES = ["You won!", "Second place", "Third place", "Fourth place"];
+export const PLACES = ["1st", "2nd", "3rd", "4th", "5th", "6th"];
+export const TITLES = ["You won!", "Second place", "Third place", "Fourth place", "Fifth place", "Sixth place"];
 export const MEDALS = ["gold", "silver", "bronze"];
 
 export const el = (tag, cls, html = "") => {
@@ -98,7 +98,7 @@ export function resultCard({ onAgain, onLeave }) {
   });
   return {
     el: panel,
-    // place: 0-3, or -1 if you didn't finish. stats: [[label, value] x3].
+    // place: 0-5, or -1 if you didn't finish. stats: [[label, value] x3].
     // rows: [{ name, time (text), you }] in finishing order.
     fill({ place, title, sub, stats, notes, rows }) {
       const medal = MEDALS[place] ?? "";

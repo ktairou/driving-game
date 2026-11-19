@@ -4,7 +4,7 @@ import { CAR_COLOURS } from "./traffic.js";
 import { DRAG_STRIPS } from "./world/layout.js";
 import { STAGE, FINISH, BOARD_DISTANCE, laneW, stripPoint, stagingAt, setLamps, drawBoard } from "./world/dragstrips.js";
 
-// Drag races: you against three cars over a half mile on a drag strip.
+// Drag races: you against five cars over a half mile on a drag strip.
 // One race at a time: idle -> (loading the other cars) -> staged ->
 // countdown -> running -> finished, then Race again or Leave.
 //
@@ -12,14 +12,19 @@ import { STAGE, FINISH, BOARD_DISTANCE, laneW, stripPoint, stagingAt, setLamps, 
 // the traffic leaves alone) and moved here, in a straight line, with the same
 // sums as your car's physics (vehicle.js) at full throttle.
 
-// Each level: the others' reaction time and engine power. `slack`: on Hard
-// their engines are matched to run a shade slower than yours flat out, or
-// with a quicker start and more power they couldn't be beaten at all.
+// Each level: the others' reaction time, and how far behind your best
+// possible time (flat out from the very instant of green) each of the five
+// finishes, in seconds. Shared out at random every race, so a different car
+// is quickest each time, and give or take a little. So a sharp start beats
+// them all, and a slow one drops you down the field: on Easy you win unless
+// you're very late away; on Medium a good start wins and a fair one is in
+// the top three; on Hard only a sharp one wins.
 const LEVELS = {
-  easy: { name: "Easy", reaction: 0.45, power: 0.88, slack: 1 },
-  medium: { name: "Medium", reaction: 0.3, power: 0.97, slack: 1 },
-  hard: { name: "Hard", reaction: 0.18, power: 1.04, slack: 1.02 },
+  easy: { name: "Easy", reaction: 0.45, gaps: [0.55, 0.8, 1.05, 1.35, 1.7] },
+  medium: { name: "Medium", reaction: 0.3, gaps: [0.25, 0.42, 0.6, 0.8, 1.05] },
+  hard: { name: "Hard", reaction: 0.18, gaps: [0.17, 0.24, 0.31, 0.39, 0.5] },
 };
+const GAP_JITTER = 0.24; // each finish is up to half this sooner or later
 const STEP = 1 / 120; // the same physics step as vehicle.js
 const ROLLING = 32; // rolling resistance, as in vehicle.js
 const RUN = FINISH - STAGE; // the half mile: 805 m
@@ -28,8 +33,14 @@ const AMBER_GAP = 0.5;
 const PENALTY = 1; // seconds added for a false start
 const GIVE_UP = 75; // still not over the line this long after green: the race is over (the slowest lorry takes about 40 s)
 const STOP_SHORT = 24; // everyone stops this far before the end of the run-off
-const YOU = 2; // your lane
-const THEIR_LANES = [1, 3, 4];
+const YOU = 3; // your lane, one of the middle two
+const THEIR_LANES = [4, 2, 5, 1, 6]; // the nearest match in power beside you
+const NEW_KINDS = 3; // at most this many kinds of vehicle loaded just for a race (each costs graphics memory)
+const FAR = 1.2; // rivals with over about three times more (or less) power for their weight than yours are too far off
+// Paint for a second (or third) of a kind of vehicle in one race: it
+// multiplies the vehicle's own colours, so white leaves them as they are.
+const WHITE = [1, 1, 1];
+const TINTS = [[0.55, 0.72, 1], [1, 0.6, 0.5], [0.62, 1, 0.62]];
 
 // Forward pull at full throttle, less air and rolling resistance, over mass
 // (vehicle.js on a flat road, going straight). `k` scales the engine.
@@ -54,6 +65,7 @@ function runTime(spec, k) {
 }
 
 // The engine scale that makes another vehicle run the half mile in `time`.
+// (Slow: some thirty runs. Done once per rival per race.)
 function matchEngine(spec, time) {
   let lo = 0.1;
   let hi = 10;
@@ -65,17 +77,44 @@ function matchEngine(spec, time) {
   return Math.sqrt(lo * hi);
 }
 
-// The three vehicles nearest yours in power for their weight (so a bus races
+// From an engine scale `k` that runs the half mile in `t0`, the one that
+// runs it in `time` (near it): the time goes as about k to the power -0.4,
+// and two quick corrections land within a hundredth of a second.
+function nudgeEngine(spec, k, t0, time) {
+  for (let i = 0; i < 2; i++) {
+    k *= Math.pow(t0 / time, 2.5);
+    t0 = runTime(spec, k);
+  }
+  return k;
+}
+
+// The `n` vehicles nearest yours in power for their weight (so a bus races
 // buses and vans, and a sports car races fast cars). Locked ones too: the
-// other drivers don't need to buy them.
-export function pickRivals(entry) {
+// other drivers don't need to buy them. With `loaded(kind)` (is that kind of
+// vehicle on the roads already?), at most three other kinds are picked, and
+// none far off in power: past that the nearest come again, kinds loaded just
+// for the race first (they can be painted differently, see start()).
+export function pickRivals(entry, n = 3, loaded = null) {
   const pw = (g) => g.spec.power / g.spec.mass;
   const mine = pw(entry);
-  return GARAGE.filter((g) => g !== entry)
+  const near = GARAGE.filter((g) => g !== entry)
     .map((g) => ({ g, d: Math.abs(Math.log(pw(g) / mine)) }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 3)
-    .map((o) => o.g);
+    .sort((a, b) => a.d - b.d);
+  if (!loaded) return near.slice(0, n).map((o) => o.g);
+  const kind = (g) => g.model ?? "gt";
+  const picks = [];
+  const extra = new Set();
+  for (const { g, d } of near) {
+    if (picks.length >= n || (picks.length && d > FAR)) break;
+    if (!loaded(kind(g)) && !extra.has(kind(g))) {
+      if (extra.size >= NEW_KINDS) continue;
+      extra.add(kind(g));
+    }
+    picks.push(g);
+  }
+  const again = [...picks.filter((g) => extra.has(kind(g))), ...picks.filter((g) => !extra.has(kind(g)))];
+  for (let i = 0; picks.length < n; i++) picks.push(again[i % again.length]);
+  return picks;
 }
 
 const fmt = (t) => `${t.toFixed(2)} s`;
@@ -117,7 +156,7 @@ export class DragRace {
     this.placeEl = this.chipUi.place;
     this.panelUi = startPanel({
       title: "Drag race",
-      note: "Race three cars over half a mile (805 m). Wait for the green light, then go!",
+      note: "Race five cars over half a mile (805 m). Wait for the green light, then go!",
       onLevel: (v) => {
         this.level = v;
         this.settings.raceLevel = v;
@@ -171,7 +210,7 @@ export class DragRace {
     this.state = "loading";
     const token = (this._token = {});
     const entry = this.hooks.entry();
-    const rivals = pickRivals(entry);
+    const rivals = pickRivals(entry, THEIR_LANES.length, (id) => !!this.traffic.type(id));
     // The rivals' kinds of vehicle (at most three new ones, loaded now if they
     // aren't already on the roads, and let go again after the race).
     const mine = new Set();
@@ -192,11 +231,24 @@ export class DragRace {
     // Their engines are matched to yours (see _stage), so every race is close
     // whatever you drive; how hard sets how near they come.
     this.yourRun = runTime(entry.spec, 1);
+    const matched = new Map(); // (a vehicle that comes twice is worked out once)
+    const seen = new Map(); // how many of each kind so far
     this.rivals = rivals.map((g, i) => {
       const type = types[i];
-      const car = { moving: true, racing: true, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, speed: 0, stopTimer: 0, type, colour: CAR_COLOURS[(i * 3 + 1) % CAR_COLOURS.length] };
+      // The concept car comes in any colour; a second of another kind is
+      // painted over (only a kind loaded just for this race: the paint would
+      // show on every one on the roads too).
+      const nth = seen.get(type) ?? 0;
+      seen.set(type, nth + 1);
+      let colour = CAR_COLOURS[(i * 3 + 1) % CAR_COLOURS.length];
+      if (!type.coloured) {
+        if (nth && mine.has(type.id)) this.traffic.colourable(type.id);
+        colour = nth ? TINTS[(nth - 1) % TINTS.length] : WHITE;
+      }
+      const car = { moving: true, racing: true, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, speed: 0, stopTimer: 0, type, colour };
       this.traffic.cars.push(car);
-      return { entry: g, spec: g.spec, match: {}, lane: THEIR_LANES[i], car, length: type.length ?? 4.6 };
+      if (!matched.has(g)) matched.set(g, matchEngine(g.spec, this.yourRun));
+      return { entry: g, spec: g.spec, match: matched.get(g), lane: THEIR_LANES[i], car, length: type.length ?? 4.6 };
     });
     this._stage();
   }
@@ -210,13 +262,19 @@ export class DragRace {
     this.front = front;
     const [x, z] = stripPoint(s, STAGE - front - 0.25, laneW(YOU));
     this.hooks.place(x, z, s.heading);
-    for (const ai of this.rivals) {
-      // Its engine scaled to run the half mile flat out as fast as yours
-      // (times the level's slack; worked out once per level).
-      ai.match[this.level] ??= matchEngine(ai.spec, this.yourRun * level.slack);
-      // A little different every time.
+    // Who gets which of the level's gaps behind your best time, this race.
+    const gaps = [...level.gaps];
+    for (let i = gaps.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [gaps[i], gaps[j]] = [gaps[j], gaps[i]];
+    }
+    this.rivals.forEach((ai, i) => {
+      // Off the line about when the level says, a little different every
+      // time; its engine set (from the one matched to yours flat out) to
+      // cross the line its gap behind your best.
       ai.reaction = Math.max(0.08, level.reaction + (Math.random() - 0.5) * 0.1);
-      ai.k = ai.match[this.level] * level.power * (1 + (Math.random() - 0.5) * 0.03);
+      const finish = this.yourRun + gaps[i % gaps.length] + (Math.random() - 0.5) * GAP_JITTER;
+      ai.k = nudgeEngine(ai.spec, ai.match, this.yourRun, Math.max(1, finish - ai.reaction));
       ai.finish = ai.reaction + runTime(ai.spec, ai.k);
       ai.u0 = STAGE - ai.length / 2 - 0.25;
       ai.x = 0;
@@ -224,7 +282,7 @@ export class DragRace {
       ai.t = 0;
       ai.over = false;
       this._moveRival(ai);
-    }
+    });
     this.state = "staged";
     this.clock = 0;
     this.greenAt = STAGED_FOR + 3 * AMBER_GAP;
@@ -416,7 +474,7 @@ export class DragRace {
     this.lights = n;
     const amber = n >= 1 && n <= 3 ? n : 0;
     const go = n === 4;
-    setLamps(this.strip, { amber, green: go, red: this.falseStart }, { amber, green: go, red: false });
+    setLamps(this.strip, { amber, green: go, red: this.falseStart }, { amber, green: go, red: false }, YOU);
     this.chipUi.lights(n, this.falseStart);
   }
 
