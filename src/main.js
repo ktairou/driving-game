@@ -46,6 +46,7 @@ import { PhotoMode } from "./photo.js";
 import { Rescue } from "./rescue.js";
 import { SpeedPhotos } from "./speedPhotos.js";
 import { PhotoAlbum } from "./album.js";
+import { FinishShow } from "./finishShow.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -327,6 +328,26 @@ async function start() {
   document.addEventListener("pointerdown", () => audio.start(), true);
   document.addEventListener("keydown", () => audio.start(), true);
 
+  // ---------- The finish of a race ----------
+  // Slow motion over the line, your place, a photo finish, the top three
+  // lined up under fireworks, then the result card (both kinds of race).
+  const finishShow = new FinishShow({
+    scene,
+    world,
+    vehicle,
+    traffic,
+    audio,
+    hooks: {
+      camera: () => chase.camera,
+      handBack: () => (chase._first = true),
+      car: () => car,
+      photo: (job) => photos.finish(job),
+      warm: (job) => photos.warm(job),
+      view: (rec) => album.view(rec),
+      night: () => daynight.night,
+    },
+  });
+
   // ---------- Drag races ----------
   // A kind of vehicle loaded only for a race goes again afterwards (it costs
   // graphics memory), unless it was on the roads to begin with or one is
@@ -361,9 +382,11 @@ async function start() {
       onStart: () => {
         autodriver.stop();
         $("auto-chip").hidden = true;
+        finishShow.warmUp(race);
       },
       kinds: { load: trafficKind, release: releaseKinds },
       earn: (place, lvl) => credits.earn(raceReward("drag", place, lvl)),
+      show: finishShow,
     },
   });
 
@@ -420,6 +443,7 @@ async function start() {
       onStart: () => {
         autodriver.stop();
         $("auto-chip").hidden = true;
+        finishShow.warmUp(street);
       },
       // The race's route shows on the little map, like a route you picked.
       guide: (route, name) => {
@@ -430,6 +454,7 @@ async function start() {
       },
       kinds: { load: trafficKind, release: releaseKinds },
       earn: (place, lvl) => credits.earn(raceReward("street", place, lvl)),
+      show: finishShow,
     },
   });
   // Opening the map or garage, getting out, being put back on the road...
@@ -1034,7 +1059,9 @@ async function start() {
   };
 
   let hornTimer = 0;
-  const tick = (dt) => {
+  const tick = (realDt) => {
+    // (A moment of slow motion as you cross a finish line: finishShow.js.)
+    const dt = realDt * finishShow.timeScale;
     input.update();
     // Out of fuel (or being filled up by the road service): the engine gives
     // nothing, and the self-driving gives up.
@@ -1089,6 +1116,8 @@ async function start() {
     const me = playerPos();
     race.update(dt);
     street.update(dt);
+    // (After the races, which move their cars, and before the traffic draws them.)
+    finishShow.update(realDt);
     speedTraps.update(dt);
     rescue.update(dt);
     photos.update(dt);
@@ -1205,11 +1234,12 @@ async function start() {
   let cockpitHud = false;
   const moveCamera = (dt) => {
     if (photo.active) photo.update(dt);
+    else if (finishShow.filming) finishShow.film(dt);
     else if (mode === "drive") chase.update(dt, vehicle);
     else if (mode === "fuel") refuel.camera(chase.camera);
     else chase.followPerson(dt, people.player);
     // (Hidden while you look behind, as the head turns away from it.)
-    const inSeat = mode === "drive" && chase.inDriverSeat;
+    const inSeat = mode === "drive" && chase.inDriverSeat && !finishShow.filming;
     cabin.setShown(inSeat && !chase.lookingBack && !photo.active);
     if (cabin.shown) cabin.update(dt);
     // With the cockpit's own dials in view, the speed panel and the Get out
@@ -1219,7 +1249,7 @@ async function start() {
       cockpitHud = kit;
       $("hud").classList.toggle("hud-cockpit", cockpitHud);
     }
-    edgeBlur?.update(mode === "drive" ? vehicle.speed : 0);
+    edgeBlur?.update(mode === "drive" && !finishShow.filming ? vehicle.speed : 0);
   };
 
   let fpsTimer = 0;
@@ -1310,7 +1340,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, gateParts, credits, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, show: finishShow, gateParts, credits, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
   }
 }
 

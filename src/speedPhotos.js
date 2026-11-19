@@ -8,6 +8,11 @@ import { clamp } from "./noise.js";
 // limit, place, date and time). Tapping the card opens the album (album.js),
 // where the pictures are kept.
 //
+// Race finish photos (finishShow.js) are taken the same way, by a camera
+// beside the finish line, framing you and the cars near you, with the race,
+// your place and time printed across them. They go to the album too, but
+// no card slides in: the race's result card shows them.
+//
 // The picture is drawn by a second camera into a small texture of its own,
 // so the screen never shows a frame of the wrong view, with the game
 // camera's own colour grading (tone mapping, exposure...). A couple of frames
@@ -23,6 +28,8 @@ const READ_AFTER = 2; // frames between drawing the picture and reading it back
 const MAX_DRAWS = 2; // drawn once more (at most) if anything in it wasn't ready yet (the first picture)
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const AXIS_Y = new Vector3(0, 1, 0);
+// A race finish photo's place, in its medal's colour (white from 4th on).
+const MEDAL_INK = { gold: "#ffd34d", silver: "#dfe5ec", bronze: "#f0a061" };
 
 // "142 km/h" or "88 mph".
 export const speedWords = (ms, units) => (units === "mph" ? `${Math.round(ms * 2.23694)} mph` : `${Math.round(ms * 3.6)} km/h`);
@@ -41,7 +48,8 @@ export class SpeedPhotos {
   //   flash() -> how much the camera's flash brightens the picture (1 = none),
   //   before() / after() (just before and after the picture is drawn),
   //   keep(record) (into the album), open(record) (the card was tapped) }
-  // A record: { taken (ms), clock, speed (m/s), limit (km/h), place, jpeg (ArrayBuffer) }.
+  // A record: { taken (ms), clock, speed (m/s), limit (km/h), place, jpeg (ArrayBuffer) },
+  // or for a race finish: { kind: "finish", taken, clock, race, pos ("1st"), time, jpeg }.
   constructor(scene, hooks) {
     this.scene = scene;
     this.hooks = hooks;
@@ -88,6 +96,26 @@ export class SpeedPhotos {
     if (this.queue.length < 3) this.queue.push({ from, speed, limit, place, clock: this.hooks.clock(), flash: this.hooks.flash?.() ?? 1, taken: Date.now(), wait: clamp(7 / Math.max(speed, 1), 0.08, 0.35), phase: "wait", frame: 0, draws: 0 });
   }
 
+  // A race finish (finishShow.js): `from` is the camera beside the line
+  // ([x, y, z]), `subjects` the cars to frame (anything with x, y, z and
+  // maybe length; yours first), `race` its name, `pos` your place ("1st"),
+  // `time` in words. Drawn this very frame, ahead of any speed photo waiting;
+  // `done(record, blob)` once it's packed.
+  finish({ from, subjects, race, pos, time, medal, done }) {
+    this.hooks.shutter();
+    // (Half the speed camera's flash at night: the finish line has its own lights.)
+    const flash = 1 + ((this.hooks.flash?.() ?? 1) - 1) * 0.5;
+    this.queue.unshift({ kind: "finish", from, subjects, race, pos, time, medal, done, clock: this.hooks.clock(), flash, taken: Date.now(), wait: 0, phase: "wait", frame: 0, draws: 0, maxDraws: 6 });
+  }
+
+  // Draws one picture of `subjects` from `from` and throws it away, so that
+  // everything in it is ready before a race's finish photo (taken at full
+  // speed: there's no waiting for a better moment). Nothing shows or is kept.
+  warm({ from, subjects }) {
+    if (this.job || this.queue.length) return;
+    this.queue.push({ kind: "warm", from, subjects, wait: 0, phase: "wait", frame: 0, draws: 0, maxDraws: 6 });
+  }
+
   // Every frame (not while the game is paused).
   update(dt) {
     if (this.cardTime > 0) {
@@ -106,8 +134,11 @@ export class SpeedPhotos {
       // frame's list.
       const done = this.scene.getFrameId() >= job.frame + READ_AFTER;
       const list = this.scene.customRenderTargets;
-      if ((done || job.draws >= MAX_DRAWS) && list.includes(this.rtt)) list.splice(list.indexOf(this.rtt), 1);
-      if (done) this._read(job);
+      if ((done || job.draws >= (job.maxDraws ?? MAX_DRAWS)) && list.includes(this.rtt)) list.splice(list.indexOf(this.rtt), 1);
+      if (done && job.kind === "warm") {
+        this.rtt.renderList = [];
+        this.job = null;
+      } else if (done) this._read(job);
     }
   }
 
@@ -195,6 +226,7 @@ export class SpeedPhotos {
   // Points the camera at your vehicle, framed so it fills about half the
   // picture (a bus needs a wider view than a car).
   _aim() {
+    if (this.job?.kind === "finish" || this.job?.kind === "warm") return this._frame(this.job);
     const cam = this.cam;
     const s = this.hooks.subject();
     this._at.set(s.x, s.y + 0.6, s.z);
@@ -202,6 +234,64 @@ export class SpeedPhotos {
     cam.setTarget(this._at);
     const reach = Math.max(2.6, (s.length ?? 4.6) * 0.55);
     cam.fov = clamp(2 * Math.atan(reach / Vector3.Distance(cam.position, this._at)), 0.2, 1.1);
+    return cam.fov;
+  }
+
+  // A race finish: your car, and the cars near you as long as the picture
+  // can take them in and still show yours well; aimed at the middle of them
+  // all. (Worked out in place: it can run a few frames in a row.)
+  _frame(job) {
+    const cam = this.cam;
+    const p = cam.position;
+    const list = job.subjects;
+    const me = list[0];
+    // The camera's own axes, looking at your car: forward, right (level) and up.
+    let fx = me.x - p.x;
+    let fy = me.y + 0.7 - p.y;
+    let fz = me.z - p.z;
+    const fl = Math.hypot(fx, fy, fz) || 1;
+    fx /= fl;
+    fy /= fl;
+    fz /= fl;
+    const rl = Math.hypot(fz, fx) || 1;
+    const rx = fz / rl;
+    const rz = -fx / rl;
+    const ux = fy * rz;
+    const uy = fz * rx - fx * rz;
+    const uz = -fy * rx;
+    // Where each car is in the picture (as tangents of the angle across and
+    // up from yours), with room round it.
+    let h0 = 0;
+    let h1 = 0;
+    let v0 = 0;
+    let v1 = 0;
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      const dx = s.x - p.x;
+      const dy = s.y + 0.7 - p.y;
+      const dz = s.z - p.z;
+      const depth = dx * fx + dy * fy + dz * fz;
+      if (depth < 2) continue;
+      const h = (dx * rx + dz * rz) / depth;
+      const v = (dx * ux + dy * uy + dz * uz) / depth;
+      const pad = ((s.length ?? 4.6) * 0.95) / depth;
+      const a0 = Math.min(h0, h - pad);
+      const a1 = Math.max(h1, h + pad);
+      const b0 = Math.min(v0, v - pad * 0.6);
+      const b1 = Math.max(v1, v + pad * 0.6);
+      if (i > 0 && (a1 - a0 > 1.25 || b1 - b0 > 0.7)) continue;
+      h0 = a0;
+      h1 = a1;
+      v0 = b0;
+      v1 = b1;
+    }
+    const hc = (h0 + h1) / 2;
+    const vc = (v0 + v1) / 2;
+    this._at.set(p.x + (fx + rx * hc + ux * vc) * 10, p.y + (fy + uy * vc) * 10, p.z + (fz + rz * hc + uz * vc) * 10);
+    cam.upVector.copyFrom(AXIS_Y);
+    cam.setTarget(this._at);
+    // (The field of view is up and down; the picture is wider than it is tall.)
+    cam.fov = clamp(2 * Math.atan(Math.max((v1 - v0) / 2, ((h1 - h0) / 2) * (PHOTO_H / PHOTO_W)) * 1.08), 0.42, 1.2);
     return cam.fov;
   }
 
@@ -233,6 +323,7 @@ export class SpeedPhotos {
     }
     const c = this.ctx2d;
     c.putImageData(this.image, 0, 0);
+    if (job.kind === "finish") return this._packFinish(job);
     const units = this.hooks.units();
     c.fillStyle = "rgba(0, 0, 0, 0.66)";
     c.fillRect(0, 0, W, 30);
@@ -259,6 +350,44 @@ export class SpeedPhotos {
       },
       "image/jpeg",
       0.85,
+    );
+  }
+
+  // A race finish's strip: your place (in its medal's colour) and time, the
+  // date, the race and "Photo finish".
+  _packFinish(job) {
+    const W = PHOTO_W;
+    const H = PHOTO_H;
+    const c = this.ctx2d;
+    c.fillStyle = "rgba(0, 0, 0, 0.66)";
+    c.fillRect(0, 0, W, 30);
+    c.fillRect(0, H - 26, W, 26);
+    c.textBaseline = "middle";
+    c.font = "bold 16px ui-monospace, Menlo, Consolas, monospace";
+    c.textAlign = "left";
+    const pos = job.pos.toUpperCase();
+    c.fillStyle = MEDAL_INK[job.medal] ?? "#ffffff";
+    c.fillText(pos, 10, 15);
+    c.fillStyle = "#ffffff";
+    c.fillText(`  ${job.time.toUpperCase()}`, 10 + c.measureText(pos).width, 15);
+    c.textAlign = "right";
+    c.fillText(dateWords(job.taken, job.clock).toUpperCase(), W - 10, 15);
+    c.font = "bold 14px ui-monospace, Menlo, Consolas, monospace";
+    c.fillText("PHOTO FINISH", W - 10, H - 13);
+    c.textAlign = "left";
+    c.fillText(job.race.toUpperCase(), 10, H - 13, W - 150);
+    this.canvas.toBlob(
+      (blob) => {
+        this.job = null;
+        if (!blob) return;
+        blob.arrayBuffer().then((jpeg) => {
+          const rec = { kind: "finish", taken: job.taken, clock: job.clock, race: job.race, pos: job.pos, time: job.time, jpeg };
+          this.hooks.keep(rec);
+          job.done?.(rec, blob);
+        });
+      },
+      "image/jpeg",
+      0.88,
     );
   }
 

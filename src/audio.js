@@ -87,6 +87,7 @@ export class GameAudio {
     this.engine = "sports"; // which ENGINES sound the car you drive makes
     this.hornOn = false;
     this.targets = {};
+    this.pitch = 1; // below 1 in slow motion (finishShow.js): the engine sounds lower
   }
 
   start() {
@@ -352,11 +353,12 @@ export class GameAudio {
     const driving = car && !onFoot;
 
     const t = this.engineTargets(car, driving && !engineOff, inCabin, this.targets);
-    if (this.engineSrc) this._set(this.engineSrc.playbackRate, t.rate, 0.05);
-    this._set(this.engineTone.frequency, t.tone || 400);
+    const p = this.pitch;
+    if (this.engineSrc) this._set(this.engineSrc.playbackRate, t.rate * p, 0.05);
+    this._set(this.engineTone.frequency, (t.tone || 400) * p);
     this._set(this.engineGain.gain, t.gain, 0.12);
-    this._set(this.hum.frequency, t.hum, 0.05);
-    this._set(this.whine.frequency, t.whine, 0.05);
+    this._set(this.hum.frequency, t.hum * p, 0.05);
+    this._set(this.whine.frequency, t.whine * p, 0.05);
     this._set(this.humGain.gain, t.humGain, 0.1);
     this._set(this.whineGain.gain, t.whineGain, 0.1);
 

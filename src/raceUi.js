@@ -85,32 +85,69 @@ export function startPanel({ title, note, onLevel, onStart }) {
   };
 }
 
-// The result card: medal (or place), title, a line under it, three numbers,
-// notes, everyone's times, and Leave / Race again.
+// "1st", "2nd", "3rd", "4th"... for any place (1 = first).
+export function ordinal(n) {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  return `${n}${teen ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+// The result card: the finish photo (when there is one), medal (or place),
+// title, a line under it, three numbers, everyone's places, times and gaps,
+// notes, credits won, and Leave / Race again.
 export function resultCard({ onAgain, onLeave }) {
   const panel = el("div", "panel", `<div class="panel-card race-card race-result"></div>`);
   panel.hidden = true;
   document.body.appendChild(panel);
   const card = panel.firstElementChild;
+  // The finish photo (finishShow.js): none, on its way, or ready.
+  const shot = { want: false, url: null, onTap: null };
   card.addEventListener("click", (e) => {
     if (e.target.closest(".race-again")) onAgain();
     else if (e.target.closest(".race-leave")) onLeave();
+    else if (e.target.closest(".race-shot") && shot.url) shot.onTap?.();
   });
+  const drawShot = () => {
+    const box = card.querySelector(".race-shot");
+    if (!box) return;
+    card.classList.toggle("with-photo", shot.want);
+    box.hidden = !shot.want;
+    const img = box.querySelector("img");
+    if (shot.url) img.src = shot.url;
+    else img.removeAttribute("src");
+    box.classList.toggle("ready", !!shot.url);
+  };
   return {
     el: panel,
-    // place: 0-3, or -1 if you didn't finish. stats: [[label, value] x3].
-    // rows: [{ name, time (text), you }] in finishing order.
-    fill({ place, title, sub, stats, notes, rows }) {
+    // place: 0 on, or -1 if you didn't finish. stats: [[label, value] x3].
+    // rows: [{ name, time (text), gap (text, optional), you }] in finishing
+    // order. credits: won this time (optional).
+    fill({ place, title, sub, stats, notes, rows, credits = 0 }) {
       const medal = MEDALS[place] ?? "";
       card.innerHTML = `
-      <div class="race-top">
-        <div class="race-medal ${medal}">${place < 0 ? "–" : PLACES[place]}</div>
-        <div><h2>${title}</h2><p class="note">${sub}</p></div>
+      <div class="race-head">
+        <button class="race-shot" hidden aria-label="Open the finish photo"><img alt="Your car crossing the finish line"><span class="race-shot-wait">Photo on its way…</span></button>
+        <div class="race-head-main">
+          <div class="race-top">
+            <div class="race-medal ${medal}">${place < 0 ? "–" : (PLACES[place] ?? ordinal(place + 1))}</div>
+            <div><h2>${title}</h2><p class="note">${sub}</p></div>
+          </div>
+          ${notes.length || credits ? `<div class="race-foot">${credits ? `<span class="race-credits">+${credits} credits</span>` : ""}${notes.length ? `<p class="race-note">${notes.join(" ")}</p>` : ""}</div>` : ""}
+        </div>
       </div>
       <div class="race-stats">${stats.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join("")}</div>
-      ${notes.length ? `<p class="race-note">${notes.join(" ")}</p>` : ""}
-      <ol class="race-table">${rows.map((r, i) => `<li class="${r.you ? "you" : ""}"><span>${i + 1}</span><span>${r.name}</span><span>${r.time}</span></li>`).join("")}</ol>
+      <ol class="race-table">${rows
+        .map((r, i) => `<li class="${r.you ? "you" : ""}"><span class="race-pos ${MEDALS[i] ?? ""}">${i + 1}</span><span class="race-name">${r.name}</span><span class="race-time">${r.time}</span><span class="race-gap">${r.gap ?? ""}</span></li>`)
+        .join("")}</ol>
       <div class="race-buttons"><button class="secondary race-leave">Leave</button><button class="primary race-again">Race again</button></div>`;
+      drawShot();
+    },
+    // The finish photo: `want` false for none; true with no url while it's
+    // being made; then its picture's address, and what tapping it does.
+    setPhoto(want, url = null, onTap = null) {
+      shot.want = want;
+      shot.url = url;
+      shot.onTap = onTap;
+      drawShot();
     },
   };
 }

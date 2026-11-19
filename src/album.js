@@ -1,15 +1,22 @@
 import "./photos.css";
 import { speedWords, limitWords, dateWords } from "./speedPhotos.js";
 
-// The album of speed camera photos (speedPhotos.js takes them), opened from
-// Settings or by tapping a new photo's card. They're kept in the browser's
+// The album of photos (speedPhotos.js takes them): speed camera photos and
+// race finish photos, opened from Settings, by tapping a new speed photo's
+// card or the photo on a race's result card. They're kept in the browser's
 // own database (IndexedDB), not with the settings (which must stay small):
-// at most KEEP, newest first, the oldest going to make room. Where that
-// database can't be used (some private browsing), photos just aren't kept.
+// at most KEEP (about 40 KB each), newest first, the oldest going to make
+// room. Where that database can't be used (some private browsing), photos
+// just aren't kept.
 
 const DB_NAME = "drivingGame.photos";
 const STORE = "photos";
-export const KEEP = 30;
+export const KEEP = 40;
+
+// Which kind a photo is. (Photos from before race finishes were kept have no
+// kind: they're all speed camera photos.)
+const isFinish = (rec) => rec.kind === "finish";
+const KIND_NAMES = { finish: "Race finish", speed: "Speed camera" };
 
 const request = (r) =>
   new Promise((ok, no) => {
@@ -98,7 +105,7 @@ export class PhotoAlbum {
     const settings = this.hooks.settings();
     const card = settings.querySelector(".panel-card");
     const row = el("div", "row");
-    row.append(el("div", "label", "Speed camera photos"), el("button", "album-open", "Open"));
+    row.append(el("div", "label", "Photos"), el("button", "album-open", "Open"));
     card.insertBefore(row, card.querySelector(".credits"));
     row.querySelector("button").addEventListener("click", () => {
       settings.hidden = true;
@@ -107,7 +114,7 @@ export class PhotoAlbum {
 
     this.panel = el("div", "panel");
     this.panel.hidden = true;
-    this.panel.innerHTML = `<div class="panel-card album-card"><h2>Speed camera photos</h2><p class="note album-note"></p><div class="album-list"></div><button class="close">Back</button></div>`;
+    this.panel.innerHTML = `<div class="panel-card album-card"><h2>Photos</h2><p class="note album-note"></p><div class="album-list"></div><button class="close">Back</button></div>`;
     this.note = this.panel.querySelector(".album-note");
     this.list = this.panel.querySelector(".album-list");
     this.panel.querySelector(".close").addEventListener("click", () => {
@@ -117,7 +124,7 @@ export class PhotoAlbum {
 
     this.viewer = el("div", "panel");
     this.viewer.hidden = true;
-    this.viewer.innerHTML = `<div class="panel-card album-view"><img class="album-big" alt="Your car, caught by a speed camera"><p class="album-big-info"></p><div class="album-buttons"><button class="primary">Save picture</button><button class="secondary">Delete</button><button class="secondary">Back</button></div><p class="album-msg"></p></div>`;
+    this.viewer.innerHTML = `<div class="panel-card album-view"><img class="album-big" alt=""><p class="album-big-info"></p><div class="album-buttons"><button class="primary">Save picture</button><button class="secondary">Delete</button><button class="secondary">Back</button></div><p class="album-msg"></p></div>`;
     this.big = this.viewer.querySelector(".album-big");
     this.info = this.viewer.querySelector(".album-big-info");
     this.msg = this.viewer.querySelector(".album-msg");
@@ -154,7 +161,7 @@ export class PhotoAlbum {
     this._letGo();
     this.list.textContent = "";
     if (!all) this.note.textContent = "Photos can't be kept on this device (private browsing may be on).";
-    else if (!all.length) this.note.textContent = "No photos yet. A speed camera takes your picture when you drive past it over the limit.";
+    else if (!all.length) this.note.textContent = "No photos yet. A speed camera takes your picture when you drive past it over the limit, and a camera at the finish line takes one when you finish a race.";
     else this.note.textContent = `Newest first. The last ${KEEP} are kept.`;
     const units = this.hooks.units();
     for (const rec of all ?? []) {
@@ -166,7 +173,10 @@ export class PhotoAlbum {
       img.src = url;
       img.alt = "";
       const text = el("span", "album-item-text");
-      text.append(el("b", "", `${speedWords(rec.speed, units)} · limit ${limitWords(rec.limit, units)}`), el("small", "", rec.place), el("small", "", dateWords(rec.taken, rec.clock)));
+      const kind = isFinish(rec) ? "finish" : "speed";
+      text.append(el("span", `album-kind ${kind}`, KIND_NAMES[kind]));
+      if (isFinish(rec)) text.append(el("b", "", `${rec.pos} place · ${rec.time}`), el("small", "", rec.race), el("small", "", dateWords(rec.taken, rec.clock)));
+      else text.append(el("b", "", `${speedWords(rec.speed, units)} · limit ${limitWords(rec.limit, units)}`), el("small", "", rec.place), el("small", "", dateWords(rec.taken, rec.clock)));
       open.append(img, text);
       open.addEventListener("click", () => this.view(rec, true));
       const del = el("button", "album-delete", "Delete");
@@ -185,12 +195,13 @@ export class PhotoAlbum {
     const blob = new Blob([rec.jpeg], { type: "image/jpeg" });
     const d = new Date(rec.taken);
     const two = (n) => String(n).padStart(2, "0");
-    const name = `speed-camera-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}.jpg`;
+    const name = `${isFinish(rec) ? "race-finish" : "speed-camera"}-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}.jpg`;
     this.viewing = { rec, fromList, url: URL.createObjectURL(blob), file: new File([blob], name, { type: "image/jpeg" }) };
     const units = this.hooks.units();
     this.big.src = this.viewing.url;
-    this.info.textContent = `${speedWords(rec.speed, units)} where the limit is ${limitWords(rec.limit, units)}`;
-    const small = el("small", "", `${rec.place} · ${dateWords(rec.taken, rec.clock)}`);
+    this.big.alt = isFinish(rec) ? "Your car crossing the finish line" : "Your car, caught by a speed camera";
+    this.info.textContent = isFinish(rec) ? `${rec.pos} place in ${rec.time}` : `${speedWords(rec.speed, units)} where the limit is ${limitWords(rec.limit, units)}`;
+    const small = el("small", "", `${isFinish(rec) ? rec.race : rec.place} · ${dateWords(rec.taken, rec.clock)}`);
     this.info.append(small);
     this.msg.textContent = "";
     // (Not kept, so nothing to delete.)

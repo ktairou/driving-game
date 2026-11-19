@@ -87,7 +87,7 @@ const shortName = (s) => {
 export class DragRace {
   // hooks: { entry() -> your garage entry, place(x, z, heading), toast(text),
   //   ready() -> may a race be offered now, onStart(), kinds: { load(id), release(ids) },
-  //   earn?(place, level) -> credits won }
+  //   earn?(place, level) -> credits won, show?: the finish (finishShow.js) }
   constructor({ vehicle, traffic, audio, fuel, settings, save, boardTexture, hooks }) {
     Object.assign(this, { vehicle, traffic, audio, fuel, settings, save, boardTexture, hooks });
     this.state = "idle";
@@ -247,6 +247,7 @@ export class DragRace {
 
   again() {
     if (this.state !== "finished" || this._lowFuel()) return;
+    this.hooks.show?.stop();
     this._stage();
   }
 
@@ -262,6 +263,7 @@ export class DragRace {
   // Ends the race wherever it's got to (also when you open the map, get out...).
   end() {
     if (this.state === "idle") return;
+    this.hooks.show?.stop();
     this._token = null;
     this.traffic.cars = this.traffic.cars.filter((c) => !c.racing);
     this.rivals = [];
@@ -463,7 +465,9 @@ export class DragRace {
     this.lastRuns[s.id] = [...list].sort((a, b) => a.lane - b.lane);
     this._drawBoard(s);
     this._showResult(list, place, newBest, earned);
-    this.resultIn = 1.3;
+    // The finish (finishShow.js): slow motion, your place, a photo, the top
+    // three lined up... then it shows this card. Straight to it if you didn't finish.
+    this.resultIn = this.hooks.show?.finish("drag", this, list, place, { fmt, newBest, earned }) ? null : 1.3;
   }
 
   _showResult(list, place, newBest, earned) {
@@ -476,7 +480,6 @@ export class DragRace {
     const notes = [];
     if (this.falseStart) notes.push("False start: 1 second added.");
     if (newBest) notes.push("New best on this strip!");
-    if (earned) notes.push(`+${earned} credits.`);
     this.resultUi.fill({
       place: this.dnf ? -1 : place,
       title: this.dnf ? "You didn't finish" : TITLES[place],
@@ -487,7 +490,8 @@ export class DragRace {
         [place === 0 && !this.dnf ? "Gap" : "To the winner", gap],
       ],
       notes,
-      rows: list.map((r) => ({ name: r.name, time: Number.isFinite(r.time) ? fmt(r.time) : "--", you: r.you })),
+      credits: earned,
+      rows: list.map((r) => ({ name: r.name, time: Number.isFinite(r.time) ? fmt(r.time) : "--", gap: r !== winner && Number.isFinite(r.time) ? `+${(r.time - winner.time).toFixed(2)}` : "", you: r.you })),
     });
   }
 
