@@ -225,7 +225,7 @@ const SERVICE = {
   citybus: ["citybus", "City bus", true],
   fire_truck: ["firetruck", "Fire engine", true],
   garbage_truck: ["bintruck", "Bin lorry", false],
-  police_sedan: ["police", "Police car", false],
+  police_sedan: ["police", "Police car", true],
   rdservtruck: ["worktruck", "Work truck", true],
   school_bus: ["schoolbus", "School bus", true],
   taxi: ["taxi", "Taxi", false],
