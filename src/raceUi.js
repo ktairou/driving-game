@@ -51,13 +51,16 @@ export function raceChip({ gates = false } = {}) {
 }
 
 // The start panel: what the race is, how hard, your best, Not now / Start.
-export function startPanel({ title, note, onLevel, onStart }) {
+// With `kinds` ([[id, name]...]), a row to pick which kind of race first
+// (a drag strip's drag race or brake test); `onKind(id)` when one is tapped.
+export function startPanel({ title, note, kinds = null, onKind = null, onLevel, onStart }) {
   const panel = el(
     "div",
     "panel",
     `<div class="panel-card race-card">
       <h2>${title}</h2>
       <p class="note race-what">${note}</p>
+      ${kinds ? `<div class="row"><div class="label">Race</div><div class="seg race-kinds">${kinds.map(([id, name]) => `<button data-v="${id}">${name}</button>`).join("")}</div></div>` : ""}
       <div class="row"><div class="label">How hard</div><div class="seg race-levels">${Object.entries(LEVEL_NAMES).map(([id, name]) => `<button data-v="${id}">${name}</button>`).join("")}</div></div>
       <p class="note race-best"></p>
       <div class="race-buttons"><button class="secondary race-cancel">Not now</button><button class="primary race-start">Start</button></div>
@@ -69,6 +72,10 @@ export function startPanel({ title, note, onLevel, onStart }) {
     const v = e.target.closest("button")?.dataset.v;
     if (v) onLevel(v);
   });
+  panel.querySelector(".race-kinds")?.addEventListener("click", (e) => {
+    const v = e.target.closest("button")?.dataset.v;
+    if (v) onKind?.(v);
+  });
   panel.querySelector(".race-cancel").addEventListener("click", () => (panel.hidden = true));
   panel.querySelector(".race-start").addEventListener("click", () => onStart());
   return {
@@ -76,8 +83,12 @@ export function startPanel({ title, note, onLevel, onStart }) {
     markLevel(level) {
       for (const b of panel.querySelectorAll(".race-levels button")) b.classList.toggle("on", b.dataset.v === level);
     },
-    // `what` replaces the note under the title (when it changes per race).
-    show({ best, what }) {
+    markKind(kind) {
+      for (const b of panel.querySelectorAll(".race-kinds button")) b.classList.toggle("on", b.dataset.v === kind);
+    },
+    // `what` replaces the note under the title, and `title` the title (when they change per race).
+    show({ best, what, title: heading }) {
+      if (heading !== undefined) panel.querySelector("h2").textContent = heading;
       if (what !== undefined) panel.querySelector(".race-what").textContent = what;
       panel.querySelector(".race-best").textContent = best;
       panel.hidden = false;
@@ -120,8 +131,8 @@ export function resultCard({ onAgain, onLeave }) {
     el: panel,
     // place: 0 on, or -1 if you didn't finish. stats: [[label, value] x3].
     // rows: [{ name, time (text), gap (text, optional), you }] in finishing
-    // order.
-    fill({ place, title, sub, stats, notes, rows }) {
+    // order. `again` is what the button to go again says.
+    fill({ place, title, sub, stats, notes, rows, again = "Race again" }) {
       const medal = MEDALS[place] ?? "";
       card.innerHTML = `
       <div class="race-head">
@@ -138,7 +149,7 @@ export function resultCard({ onAgain, onLeave }) {
       <ol class="race-table">${rows
         .map((r, i) => `<li class="${r.you ? "you" : ""}"><span class="race-pos ${MEDALS[i] ?? ""}">${i + 1}</span><span class="race-name">${r.name}</span><span class="race-time">${r.time}</span><span class="race-gap">${r.gap ?? ""}</span></li>`)
         .join("")}</ol>
-      <div class="race-buttons"><button class="secondary race-leave">Leave</button><button class="primary race-again">Race again</button></div>`;
+      <div class="race-buttons"><button class="secondary race-leave">Leave</button><button class="primary race-again">${again}</button></div>`;
       drawShot();
     },
     // The finish photo: `want` false for none; true with no url while it's

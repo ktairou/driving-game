@@ -168,6 +168,9 @@ export class NightLights {
     this.windows = scene.materials.filter((m) => m.metadata?.windows);
     this.lattice = scene.getMaterialByName("ironLattice");
     this.clock = scene.getMaterialByName("clockFaceMat");
+    // The London Eye glows a soft white-blue at night, its pods warm inside.
+    this.eyeSteel = scene.getMaterialByName("eyeSteel");
+    this.eyeGlass = scene.getMaterialByName("eyeGlass");
   }
 
   setCar(car) {
@@ -215,6 +218,8 @@ export class NightLights {
     for (const m of this.windows) m.emissiveColor.set(on * 0.72, on * 0.72, on * 0.72);
     this.lattice?.emissiveColor.set(on * 0.9, on * 0.55, on * 0.2);
     this.clock?.emissiveColor.set(0.12 + on * 0.9, 0.11 + on * 0.85, 0.09 + on * 0.6);
+    this.eyeSteel?.emissiveColor.set(on * 0.32, on * 0.42, on * 0.62);
+    this.eyeGlass?.emissiveColor.set(on * 0.55, on * 0.45, on * 0.3);
   }
 
   _updateLamps(on, at) {

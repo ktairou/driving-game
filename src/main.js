@@ -22,6 +22,7 @@ import { TyreFx } from "./car/tyres.js";
 import { TrafficLights, speedLimitAt } from "./world/trafficLights.js";
 import { planStations, buildStations, stationApproach } from "./world/stations.js";
 import { LandmarkModels } from "./world/landmarkModels.js";
+import { LondonEye } from "./world/londonEye.js";
 import { Fuel, Refuel, pumpSpotAt, NEARLY_EMPTY } from "./fuel.js";
 import { ChaseCamera, EdgeBlur } from "./camera.js";
 import { Input } from "./input.js";
@@ -151,6 +152,7 @@ async function start() {
   const trapParts = buildSpeedTraps(scene, world, colliders, traps, townCameras);
   const gateParts = buildStreetRaces(scene, world, colliders, streetRaces);
   const landmarkModels = new LandmarkModels(scene, world, colliders);
+  const londonEye = new LondonEye(scene, world, colliders);
   const parks = buildParks(scene, world, colliders, town.parks, preset, town.lampGlow);
   town.lampSpots.push(...stationParts.lampSpots, ...parks.lampSpots, ...dragParts.lampSpots);
   const flags = buildFlags(scene, world, colliders, { roofs: town.roofs, parks: town.parks, stations, strips });
@@ -226,7 +228,7 @@ async function start() {
   chase.update(0, vehicle);
 
   const csm = createShadows(scene, sky.light, chase.camera, preset);
-  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters, ...dragParts.casters, ...trapParts.casters, ...gateParts.casters]) csm.addShadowCaster(m, false);
+  for (const m of [...car.shadowMeshes, ...town.casters, ...nature.casters, ...cover.casters, ...road.casters, ...landmarks.casters, ...londonEye.casters, ...traffic.types.map((t) => t.mesh), ...lights.casters, ...stationParts.casters, ...parks.casters, ...flags.casters, ...dragParts.casters, ...trapParts.casters, ...gateParts.casters]) csm.addShadowCaster(m, false);
   // Real landmark models load as you get near them.
   landmarkModels.onLoaded = (meshes) => meshes.forEach((m) => csm.addShadowCaster(m, false));
   landmarkModels.update(SPAWN.x, SPAWN.z);
@@ -786,9 +788,9 @@ async function start() {
     const me = playerPos();
     for (const p of PLACES.filter((q) => q.country === placeCountry.name && kindOf(q) === placeKind)) {
       const km = Math.hypot(p.x - me.x, p.z - me.z) / 1000;
-      // (A drag strip also shows your best time there, and your best medal;
-      // a speed trap your best speed.)
-      const best = p.strip ? race.bestText(p.strip) : p.street ? street.bestText(p.street) : p.trap ? speedTraps.bestText(p.trap) : "";
+      // (A drag strip also shows your best time and closest brake test stop
+      // there, and your best medal; a speed trap your best speed.)
+      const best = p.strip ? [race.bestText(p.strip), race.brakeText(p.strip)].filter(Boolean).join(" · ") : p.street ? street.bestText(p.street) : p.trap ? speedTraps.bestText(p.trap) : "";
       const medal = p.strip || p.street ? settings.races[(p.strip ?? p.street).id]?.medal : null;
       const what = p.street ? `Street race, ${(p.street.length / 1000).toFixed(1)} km · ` : "";
       button(list, `${p.name}<small>${what}${km < 1 ? "Under 1 km away" : `${km.toFixed(1)} km away`}${best ? ` · ${best}` : ""}${medal ? `<i class="medal-dot ${medal}"></i>` : ""}</small>`, () => {
@@ -1213,6 +1215,7 @@ async function start() {
     daynight.update(dt);
     damage.update(dt, vehicle, daynight.night);
     nightLights.update(daynight.night, braking, me, traffic.cars);
+    londonEye.update(me.x, me.z);
     landmarkTimer -= dt;
     if (landmarkTimer <= 0) {
       landmarkTimer = 1;
@@ -1402,7 +1405,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, show: finishShow, gateParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, londonEye, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, show: finishShow, gateParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
   }
 }
 

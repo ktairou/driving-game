@@ -45,6 +45,8 @@ export const ISLANDS = [
     landmarks: [
       { type: "model", model: "bigben", name: "Big Ben", x: -228, z: 24, base: 18, size: 72, yaw: Math.PI },
       { type: "model", model: "stonehenge", name: "Stonehenge", x: -130, z: 200, base: 34, size: 34, fit: "width" },
+      // Built in code (londonEye.js), just north of Kingsford, facing its main street.
+      { type: "londonEye", name: "London Eye", x: -210, z: 114, base: 64 },
       // Built in code (towerBridge.js): it carries the road to France across
       // the whole sea, from the British shore to the French one, with `pairs`
       // pairs of towers along it. x, z put the map label at its middle (the

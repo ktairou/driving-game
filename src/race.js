@@ -1,10 +1,13 @@
 import { GARAGE } from "./garage.js";
-import { PLACES, TITLES, MEDALS, raceButton, raceChip, startPanel, resultCard } from "./raceUi.js";
+import { PLACES, TITLES, MEDALS, betterMedal, raceButton, raceChip, startPanel, resultCard } from "./raceUi.js";
+import { BRAKE_LEVELS, score, metres, stopText, timeAllowed, planRival, stepRival } from "./brakeTest.js";
 import { CAR_COLOURS } from "./traffic.js";
 import { DRAG_STRIPS } from "./world/layout.js";
 import { STAGE, FINISH, BOARD_DISTANCE, laneW, stripPoint, stagingAt, setLamps, drawBoard } from "./world/dragstrips.js";
 
-// Drag races: you against five cars over a half mile on a drag strip.
+// Drag races: you against five cars over a half mile on a drag strip. The
+// same strips also run brake tests (brakeTest.js): go on green, then stop on
+// the finish line; you pick which at the start panel.
 // One race at a time: idle -> (loading the other cars) -> staged ->
 // countdown -> running -> finished, then Race again or Leave.
 //
@@ -116,7 +119,17 @@ export function pickRivals(entry, n = 3, loaded = null) {
   return picks;
 }
 
+const DRAG_NOTE = "Race five cars over half a mile (805 m). Wait for the green light, then go!";
+const BRAKE_NOTE = "Go on green, then stop with your front bumper as close to the finish line as you can. You must stop before the time runs out. Going past the line counts double.";
+
 const fmt = (t) => `${t.toFixed(2)} s`;
+const shuffle = (a) => {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
 const shortName = (s) => {
   const n = s.name.replace("Drag strip · ", "");
   return n[0].toUpperCase() + n.slice(1);
@@ -134,6 +147,7 @@ export class DragRace {
     this.loaded = new Set(); // kinds of vehicle loaded just for this race
     this.lastRuns = {}; // per strip, for the timing board
     this.level = LEVELS[settings.raceLevel] ? settings.raceLevel : "medium";
+    this.kind = settings.stripKind === "brake" ? "brake" : "drag"; // a drag race or a brake test (the last one picked)
     this._ctl = { steer: 0, throttle: 0, brake: 1, reverse: 0, handbrake: true, steerAnalog: false };
     this._boardTimer = 0;
     this._boardFor = undefined;
@@ -155,7 +169,14 @@ export class DragRace {
     this.placeEl = this.chipUi.place;
     this.panelUi = startPanel({
       title: "Drag race",
-      note: "Race five cars over half a mile (805 m). Wait for the green light, then go!",
+      note: DRAG_NOTE,
+      kinds: [["drag", "Drag race"], ["brake", "Brake test"]],
+      onKind: (k) => {
+        this.kind = k;
+        this.settings.stripKind = k;
+        this.save(this.settings);
+        this._showPanel();
+      },
       onLevel: (v) => {
         this.level = v;
         this.settings.raceLevel = v;
@@ -181,6 +202,14 @@ export class DragRace {
     return `Best ${fmt(best.time)}${car ? ` · ${car.name}` : ""}`;
   }
 
+  // Your closest brake test stop on a strip, in words (for the panel and the map list).
+  brakeText(s) {
+    const best = this.settings.brakes?.[s.id]?.best;
+    if (!best) return "";
+    const car = GARAGE.find((g) => g.id === best.car);
+    return `Closest stop ${best.dist.toFixed(2)} m${car ? ` · ${car.name}` : ""}`;
+  }
+
   // Tapping Race: check there's fuel, then show the panel.
   open() {
     const s = stagingAt(this.vehicle.x, this.vehicle.z);
@@ -190,8 +219,20 @@ export class DragRace {
     // (The same level as last time, whichever kind of race that was.)
     if (LEVELS[this.settings.raceLevel]) this.level = this.settings.raceLevel;
     this._markLevel();
-    const best = this.bestText(s);
-    this.panelUi.show({ best: best ? `Your ${best.replace("Best", "best here:").replace(" · ", " in the ")}` : "No best time here yet." });
+    this._showPanel();
+  }
+
+  // The start panel, for whichever was picked: a drag race or a brake test.
+  _showPanel() {
+    const s = this.strip;
+    this.panelUi.markKind(this.kind);
+    if (this.kind === "brake") {
+      const best = this.brakeText(s);
+      this.panelUi.show({ title: "Brake test", what: BRAKE_NOTE, best: best ? `Your ${best.replace("Closest stop", "closest stop here:").replace(" · ", " in the ")}` : "No brake test here yet." });
+    } else {
+      const best = this.bestText(s);
+      this.panelUi.show({ title: "Drag race", what: DRAG_NOTE, best: best ? `Your ${best.replace("Best", "best here:").replace(" · ", " in the ")}` : "No best time here yet." });
+    }
   }
 
   _lowFuel() {
@@ -261,12 +302,38 @@ export class DragRace {
     this.front = front;
     const [x, z] = stripPoint(s, STAGE - front - 0.25, laneW(YOU));
     this.hooks.place(x, z, s.heading);
+    if (this.kind === "brake") this._stageBrake(level);
+    else this._stageDrag(level);
+    this.state = "staged";
+    this.clock = 0;
+    this.greenAt = STAGED_FOR + 3 * AMBER_GAP;
+    this.lights = 0;
+    this.falseStart = false;
+    this.youTime = null;
+    this.dnf = false;
+    this.top = 0;
+    this.prevFront = STAGE - 0.25;
+    this.resultIn = null;
+    this.place = 0;
+    this._shownClock = null;
+    this._shownPlace = null;
+    // (Brake tests: where you stopped, whether you've got going yet, out of
+    // time, and the car braking itself once you're done.)
+    this.stopShort = null;
+    this.moved = false;
+    this.outOfTime = false;
+    this.autoBrake = false;
+    this._setLights(0);
+    this.result.hidden = true;
+    this.chip.hidden = false;
+    this.button.hidden = true;
+    this._buttonShown = false;
+    this._drawBoard(s);
+  }
+
+  _stageDrag(level) {
     // Who gets which of the level's gaps behind your best time, this race.
-    const gaps = [...level.gaps];
-    for (let i = gaps.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [gaps[i], gaps[j]] = [gaps[j], gaps[i]];
-    }
+    const gaps = shuffle([...level.gaps]);
     this.rivals.forEach((ai, i) => {
       // Off the line about when the level says, a little different every
       // time; its engine set (from the one matched to yours flat out) to
@@ -282,24 +349,26 @@ export class DragRace {
       ai.over = false;
       this._moveRival(ai);
     });
-    this.state = "staged";
-    this.clock = 0;
-    this.greenAt = STAGED_FOR + 3 * AMBER_GAP;
-    this.lights = 0;
-    this.falseStart = false;
-    this.youTime = null;
-    this.dnf = false;
-    this.top = 0;
-    this.prevFront = STAGE - 0.25;
-    this.resultIn = null;
-    this.place = 0;
-    this._shownClock = null;
-    this._setLights(0);
-    this.result.hidden = true;
-    this.chip.hidden = false;
-    this.button.hidden = true;
-    this._buttonShown = false;
-    this._drawBoard(s);
+  }
+
+  // A brake test: the others go about as quick as you (their engines matched
+  // to yours, give or take), and each will stop its share of the level's
+  // gaps from the line. You get the time your car needs, and plenty more.
+  _stageBrake(level) {
+    const gaps = shuffle([...BRAKE_LEVELS[this.level]]);
+    this.rivals.forEach((ai, i) => {
+      ai.reaction = Math.max(0.08, level.reaction + (Math.random() - 0.5) * 0.1);
+      ai.k = ai.match * (0.94 + Math.random() * 0.12);
+      ai.u0 = STAGE - ai.length / 2 - 0.25;
+      ai.x = 0;
+      ai.v = 0;
+      ai.t = 0;
+      // (x is how far its front has come from the start line, which it sits 0.25 m behind.)
+      planRival(ai, gaps[i % gaps.length], RUN + 0.25);
+      this._moveRival(ai);
+    });
+    const spec = this.hooks.entry().spec;
+    this.limit = timeAllowed(RUN + 0.25, (v) => accel(spec, 1, v));
   }
 
   again() {
@@ -341,7 +410,8 @@ export class DragRace {
   controls(input) {
     const c = this._ctl;
     if (this.state === "loading" || this.state === "staged" || this.state === "countdown") {
-      if (this.state === "countdown" && input.throttle > 0 && !this.falseStart) {
+      // (No false starts in a brake test: it isn't timed from green.)
+      if (this.kind === "drag" && this.state === "countdown" && input.throttle > 0 && !this.falseStart) {
         this.falseStart = true;
         this._setLights(this.lights);
         this.hooks.toast("False start! 1 second added");
@@ -351,6 +421,17 @@ export class DragRace {
       c.throttle = 0;
       c.brake = 1;
       c.handbrake = true;
+      return c;
+    }
+    if (this.kind === "brake") {
+      // Yours until you stop, go over the line or run out of time; then it
+      // stands on the brakes by itself (you can still steer).
+      if (this.state === "running" && !this.autoBrake) return input;
+      c.steer = input.steer;
+      c.steerAnalog = input.steerAnalog;
+      c.throttle = 0;
+      c.brake = 1;
+      c.handbrake = this.vehicle.forwardSpeed <= 0.3;
       return c;
     }
     if (this.youTime === null && !this.dnf) return input;
@@ -401,6 +482,7 @@ export class DragRace {
     }
     if (this.state !== "running" && this.state !== "finished") return this._hud();
     const t = this.clock - this.greenAt;
+    if (this.kind === "brake") return this._updateBrake(dt, t, u + this.front);
     for (const ai of this.rivals) this._driveRival(ai, t);
     // You: timed from green to your front bumper crossing the finish line.
     const front = u + this.front;
@@ -480,6 +562,7 @@ export class DragRace {
   }
 
   _hud(t = 0) {
+    if (this.kind === "brake") return this._brakeHud(t, this._yourFront());
     // (Only touches the page when what it shows changes.)
     const shown = this.youTime ?? (this.dnf ? null : Math.max(0, t));
     const hundredths = shown === null ? -1 : Math.round(shown * 100);
@@ -517,7 +600,7 @@ export class DragRace {
       if (medal && (!rec.medal || MEDALS.indexOf(medal) < MEDALS.indexOf(rec.medal))) rec.medal = medal;
       this.save(this.settings);
     }
-    this.lastRuns[s.id] = [...list].sort((a, b) => a.lane - b.lane);
+    this.lastRuns[s.id] = { kind: "drag", list: [...list].sort((a, b) => a.lane - b.lane) };
     this._drawBoard(s);
     this._showResult(list, place, newBest);
     // The finish (finishShow.js): slow motion, your place, a photo, the top
@@ -575,11 +658,135 @@ export class DragRace {
     if (near && near !== this._boardFor) this._drawBoard(near);
   }
 
+  // The timing board over the finish: the last run there (a drag race's
+  // times, or a brake test's stops), and the best to go with it.
   _drawBoard(s) {
     this._boardFor = s;
     const last = this.lastRuns[s.id];
-    const rows = last ? last.map((r) => ({ lane: r.lane, name: r.name, time: Number.isFinite(r.time) ? r.time.toFixed(2) : "--", you: r.you })) : [];
-    const best = this.settings.races[s.id]?.best;
-    drawBoard(this.boardTexture, { title: shortName(s).toUpperCase(), rows, best: best ? `BEST ${fmt(best.time)}` : BOARD_DISTANCE });
+    const brake = last?.kind === "brake";
+    const shown = (r) => (brake ? (Number.isFinite(r.score) ? `${r.score.toFixed(2)} m` : "--") : Number.isFinite(r.time) ? r.time.toFixed(2) : "--");
+    const rows = last ? last.list.map((r) => ({ lane: r.lane, name: r.name, time: shown(r), you: r.you })) : [];
+    let best;
+    if (brake) {
+      const b = this.settings.brakes?.[s.id]?.best;
+      best = b ? `CLOSEST STOP ${b.dist.toFixed(2)} m` : "BRAKE TEST";
+    } else {
+      const b = this.settings.races[s.id]?.best;
+      best = b ? `BEST ${fmt(b.time)}` : BOARD_DISTANCE;
+    }
+    drawBoard(this.boardTexture, { title: shortName(s).toUpperCase(), rows, best });
+  }
+
+  // --- Brake tests -----------------------------------------------------------
+
+  // Each frame of a brake test, from green: the others, and you (`front` is
+  // how far down the strip your front bumper is).
+  _updateBrake(dt, t, front) {
+    for (const ai of this.rivals) {
+      stepRival(ai, t - ai.reaction, (v) => accel(ai.spec, ai.k, v));
+      this._moveRival(ai);
+    }
+    if (this.state === "running") {
+      this.top = Math.max(this.top, this.vehicle.speed);
+      if (front > STAGE + 3) this.moved = true;
+      // Over the line: the car brakes itself, and where it stops counts.
+      if (front >= FINISH) this.autoBrake = true;
+      if (this.moved && this.vehicle.speed < 0.15) {
+        this.stopShort = FINISH - front;
+        this._finishBrake();
+      } else if (t > this.limit) {
+        this.outOfTime = true;
+        this._finishBrake();
+      }
+    }
+    if (this.resultIn !== null) {
+      this.resultIn -= dt;
+      if (this.resultIn <= 0) {
+        this.resultIn = null;
+        this.result.hidden = false;
+      }
+    }
+    this._brakeHud(t, front);
+  }
+
+  // The chip in a brake test: how far to the line (then where you stopped),
+  // and the time left (then your place).
+  _brakeHud(t, front) {
+    let main;
+    let side;
+    if (this.state === "running" || this.state === "finished") {
+      const left = this.stopShort ?? FINISH - front;
+      main = this.outOfTime ? "--" : left >= 0 ? metres(left) : `${metres(left)} over`;
+      side = this.state === "finished" ? (this.outOfTime ? "Out of time" : PLACES[this.place]) : `${Math.max(0, Math.ceil(this.limit - t))} s left`;
+    } else {
+      main = metres(FINISH - front);
+      side = `${this.limit} s left`;
+    }
+    if (main !== this._shownClock) {
+      this._shownClock = main;
+      this.clockEl.textContent = main;
+    }
+    if (side !== this._shownPlace) {
+      this._shownPlace = side;
+      this.placeEl.textContent = side;
+    }
+  }
+
+  // Stopped (or out of time): work out the places, save your closest stop, show the card.
+  _finishBrake() {
+    const s = this.strip;
+    this.state = "finished";
+    this.autoBrake = true;
+    const entry = this.hooks.entry();
+    const mine = this.outOfTime ? Infinity : score(this.stopShort);
+    const list = this.rivals.map((ai) => ({ name: ai.entry.name, score: ai.score, short: ai.short, lane: ai.lane }));
+    list.push({ name: "You", you: true, score: mine, short: this.stopShort, lane: YOU });
+    list.sort((a, b) => a.score - b.score);
+    const place = list.findIndex((r) => r.you);
+    this.place = place;
+    let newBest = false;
+    if (!this.outOfTime) {
+      // (Kept apart from the drag races' times and medals.)
+      const rec = ((this.settings.brakes ??= {})[s.id] ??= { best: null, cars: {} });
+      rec.cars ??= {};
+      const my = (rec.cars[entry.id] ??= {});
+      const d = +mine.toFixed(3);
+      newBest = !rec.best || d < rec.best.dist;
+      if (newBest) rec.best = { dist: d, car: entry.id };
+      if (my.dist === undefined || d < my.dist) my.dist = d;
+      const medal = MEDALS[place];
+      if (medal) {
+        my.medal = betterMedal(my.medal, medal);
+        rec.medal = betterMedal(rec.medal, medal);
+      }
+      this.save(this.settings);
+    }
+    this.lastRuns[s.id] = { kind: "brake", list: [...list].sort((a, b) => a.lane - b.lane) };
+    this._drawBoard(s);
+    this._showBrakeResult(list, place, newBest);
+    this.resultIn = 1.3;
+  }
+
+  _showBrakeResult(list, place, newBest) {
+    const units = this.settings.units === "mph" ? ["mph", 2.23694] : ["km/h", 3.6];
+    const out = this.outOfTime;
+    const notes = [];
+    if (out) notes.push(`You had ${this.limit} seconds to stop.`);
+    else if (this.stopShort < 0) notes.push("Past the line counts double.");
+    if (newBest) notes.push("Your closest stop on this strip!");
+    this.resultUi.setPhoto(false);
+    this.resultUi.fill({
+      place: out ? -1 : place,
+      title: out ? "Out of time" : TITLES[place],
+      sub: `Brake test · ${shortName(this.strip)} · ${LEVELS[this.level].name}`,
+      stats: [
+        ["Your stop", out ? "--" : stopText(this.stopShort)],
+        ["Score", out ? "--" : `${score(this.stopShort).toFixed(2)} m`],
+        ["Top speed", `${Math.round(this.top * units[1])} ${units[0]}`],
+      ],
+      notes,
+      rows: list.map((r) => ({ name: r.name, time: Number.isFinite(r.score) ? `${r.score.toFixed(2)} m` : "--", gap: Number.isFinite(r.score) && r.short < 0 ? "over" : "", you: r.you })),
+      again: "Try again",
+    });
   }
 }

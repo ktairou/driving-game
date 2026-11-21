@@ -256,6 +256,31 @@ function signTexture(scene) {
   return t;
 }
 
+// Brake test boards: how far to the finish line, black on white, one number
+// in each third of the picture.
+const MARKS = [150, 100, 50];
+const MARKS_W = 512;
+const MARKS_H = 128;
+function marksTexture(scene) {
+  const t = new DynamicTexture("dragMarks", { width: MARKS_W, height: MARKS_H }, scene, true);
+  const c = t.getContext();
+  const cw = MARKS_W / MARKS.length;
+  MARKS.forEach((d, i) => {
+    c.fillStyle = "#f4f4f0";
+    c.fillRect(i * cw, 0, cw, MARKS_H);
+    c.strokeStyle = "#101214";
+    c.lineWidth = 10;
+    c.strokeRect(i * cw + 6, 6, cw - 12, MARKS_H - 12);
+    c.fillStyle = "#101214";
+    c.font = `bold 76px ${FONT}`;
+    c.textAlign = "center";
+    c.textBaseline = "middle";
+    c.fillText(String(d), i * cw + cw / 2, MARKS_H / 2 + 4);
+  });
+  t.update();
+  return t;
+}
+
 // The timing board over the finish line: the last run's times, and the best.
 // One picture shared by every strip; it shows the strip you're nearest.
 const BOARD_W = 512;
@@ -315,6 +340,7 @@ export function buildDragStrips(scene, world, colliders, strips) {
     numbers: plainMaterial(scene, "dragNumbersMat", rgb(0.82, 0.82, 0.78), { roughness: 0.6 }),
     rubber: plainMaterial(scene, "dragRubberMat", rgb(1, 1, 1), { roughness: 0.75 }),
     sign: plainMaterial(scene, "dragSignMat", rgb(1, 1, 1), { roughness: 0.5 }),
+    marks: plainMaterial(scene, "dragMarksMat", rgb(1, 1, 1), { roughness: 0.5 }),
   };
   // The strip is resurfaced darker than the public roads.
   mats.asphalt.albedoColor = rgb(0.55, 0.55, 0.56);
@@ -329,6 +355,9 @@ export function buildDragStrips(scene, world, colliders, strips) {
   mats.sign.albedoTexture = signTexture(scene);
   mats.sign.emissiveTexture = mats.sign.albedoTexture;
   mats.sign.emissiveColor = new Color3(0.25, 0.25, 0.25);
+  mats.marks.albedoTexture = marksTexture(scene);
+  mats.marks.emissiveTexture = mats.marks.albedoTexture;
+  mats.marks.emissiveColor = new Color3(0.25, 0.25, 0.25);
   // The floodlights glow after dark, with the town windows (nightlights.js).
   mats.floodHead.metadata = { windows: true };
   mats.floodHead.emissiveColor = new Color3(0, 0, 0);
@@ -557,6 +586,24 @@ export function buildDragStrips(scene, world, colliders, strips) {
       const [x, z] = stripPoint(s, f.u, f.side * (HALF - 3.5));
       lampSpots.push({ x, y: s.height, z, lightHeight: FLOOD_H - 0.6 });
     }
+
+    // --- Brake test boards: 150, 100 and 50 m before the finish line, beside
+    // the barrier on the grandstand side, facing the cars coming down ---
+    MARKS.forEach((d, i) => {
+      const u = FINISH - d;
+      const w = s.stand * (outer + 1.5);
+      const y0 = 1.3;
+      const y1 = 2.8;
+      const bw = 1;
+      const a = i / MARKS.length;
+      const b = (i + 1) / MARKS.length;
+      g(mats.marks).addQuad(P(u - 0.06, y0, w - bw), P(u - 0.06, y0, w + bw), P(u - 0.06, y1, w + bw), P(u - 0.06, y1, w - bw), N(-1, 0, 0), [a, 0], [b, 0], [b, 1], [a, 1]);
+      box(mats.dark, u - 0.04, u + 0.06, y0 - 0.05, y1 + 0.05, w - bw - 0.05, w + bw + 0.05, 1);
+      for (const k of [-0.65, 0.65]) {
+        box(mats.steel, u + 0.06, u + 0.18, -0.4, y1, w + k - 0.06, w + k + 0.06, 1);
+        colliders.addCircle(...stripPoint(s, u + 0.12, w + k), 0.12);
+      }
+    });
 
     for (const [mat, b] of builders) keep(b.toMesh(`drag_${s.id}_${mat.name}`, scene), mat, CAST.has(mat));
 
