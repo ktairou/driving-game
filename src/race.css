@@ -313,16 +313,6 @@
   margin: 0;
 }
 
-.race-credits {
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: rgba(255, 207, 74, 0.16);
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
 /* Narrow screens: the photo above the rest. */
 @media (max-width: 600px) {
   .race-head {

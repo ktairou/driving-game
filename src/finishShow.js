@@ -197,14 +197,14 @@ export class FinishShow {
   // card): `list` is everyone in finishing order ({ name, time, you }),
   // `place` yours (0 = first), `fmt` its way of writing times. True if the
   // show is on (it shows the card itself); false if you didn't finish.
-  finish(kind, race, list, place, { fmt, newBest = false, earned = 0 } = {}) {
+  finish(kind, race, list, place, { fmt, newBest = false } = {}) {
     if (race.dnf || !(place >= 0)) return false;
     this.stop();
     const token = (this.token = {});
     this.kind = kind;
     this.race = race;
     this.place = place;
-    this.saved = { newBest, earned };
+    this.saved = { newBest };
     // Everyone, in the race's own order, with the car the traffic draws for them.
     const left = race.rivals.slice();
     this.racers = list.map((r) => {
@@ -394,7 +394,7 @@ export class FinishShow {
     const list = race.rivals.map((ai) => ({ name: ai.entry.name, time: ai.time ?? Infinity, along: ai.driver.progress }));
     list.push({ name: "You", you: true, time: race.youTime, along: Infinity });
     list.sort((a, b) => a.time - b.time || b.along - a.along);
-    race._showResult(list, this.place, this.saved.newBest, this.saved.earned);
+    race._showResult(list, this.place, this.saved.newBest);
   }
 
   // --- The top three, lined up -------------------------------------------------

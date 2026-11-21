@@ -125,27 +125,6 @@ const real = (c) => ({
 export const REAL = REAL_CARS.map(real);
 GARAGE.push(...REAL);
 
-// Free from the start: the concept car and the six everyday cars. The rest
-// are bought with credits won in races and at speed traps (credits.js).
-export const STARTERS = ["gt-red", "sedan", "hatchback", "compact", "wagon", "minivan", "suv"];
-
-// What a vehicle costs in credits: more the faster, quicker and grippier it
-// is (from 250 for a bus to 3,000 for the sports car), rounded to 50. The real
-// cars go much higher: from about 1,000 for a 1960s classic to 20,000 for the
-// fastest hypercar.
-export function price(entry) {
-  if (STARTERS.includes(entry.id)) return 0;
-  if (entry.real) {
-    const p = figures(entry);
-    const clamp01 = (x) => Math.min(1, Math.max(0, x));
-    const rating = 0.45 * clamp01((p.topKmh - 150) / 300) + 0.4 * clamp01((12 - p.zeroTo100) / 9.6) + 0.15 * clamp01((entry.spec.grip - 1) / 0.43);
-    const credits = 800 * 25 ** rating;
-    return Math.round(credits / (credits > 5000 ? 500 : 50)) * (credits > 5000 ? 500 : 50);
-  }
-  const s = stats(entry);
-  return Math.round((150 + 379 * (s.speed + s.acceleration + s.grip) ** 1.9) / 50) * 50;
-}
-
 // What the garage shows: power, top speed and 0-100 km/h (or 0-60 mph), as the game drives it.
 const perf = new Map();
 export function figures(entry) {

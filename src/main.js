@@ -31,8 +31,7 @@ import { Traffic, TRAFFIC_MIX } from "./traffic.js";
 import { People } from "./people.js";
 import { Navigator, AutoDriver } from "./navigation.js";
 import { renderMapImage, MiniMap, BigMap, PLACES, setFuelStations } from "./map.js";
-import { GARAGE, REAL, applyPaint, price, figures } from "./garage.js";
-import { Credits, raceReward, trapReward, credits as creditText } from "./credits.js";
+import { GARAGE, REAL, applyPaint, figures } from "./garage.js";
 import { DayNight, TIME_PRESETS } from "./daynight.js";
 import { NightLights } from "./nightlights.js";
 import { planDragStrips, buildDragStrips } from "./world/dragstrips.js";
@@ -69,7 +68,6 @@ Object.assign(KhronosTextureContainer2.URLConfig, {
 });
 
 const settings = loadSettings();
-const credits = new Credits(settings, saveSettings);
 let level = startingLevel(settings);
 let preset = { ...PRESETS[level] };
 
@@ -389,7 +387,6 @@ async function start() {
         finishShow.warmUp(race);
       },
       kinds: { load: trafficKind, release: releaseKinds },
-      earn: (place, lvl) => credits.earn(raceReward("drag", place, lvl)),
       show: finishShow,
     },
   });
@@ -417,7 +414,6 @@ async function start() {
       active: () => mode === "drive" && !autodriver.active,
       entry: () => carEntry,
       flash: (k) => trapParts.flash(k),
-      earn: (oldBest, newBest) => credits.earn(trapReward(oldBest, newBest)),
       // Over the limit: the camera takes your picture (country added, as trap names repeat).
       photo: (t, speed, limit, end) => photos.snap({ from: cameraEye(t, end), speed, limit, place: `${t.town ?? t.name}, ${world.islandById(t.island).def.name}` }),
     },
@@ -457,7 +453,6 @@ async function start() {
         } else if (guide?.race) guide = null;
       },
       kinds: { load: trafficKind, release: releaseKinds },
-      earn: (place, lvl) => credits.earn(raceReward("street", place, lvl)),
       show: finishShow,
     },
   });
@@ -859,10 +854,8 @@ async function start() {
   });
 
   // ---------- Garage ----------
-  // Locked vehicles show their price and a lock; tapping one asks before
-  // buying it with credits. The one you're driving is never locked.
+  // Every vehicle is free to drive: tap one to swap to it.
   const garagePanel = $("garage-panel");
-  const LOCK = `<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>`;
   const drive = async (g, card) => {
     if (swapping || g === carEntry) return;
     swapping = true;
@@ -881,30 +874,6 @@ async function start() {
       renderGarage();
     }
   };
-  const buyPanel = $("buy-panel");
-  let buying = null;
-  const askToBuy = (g) => {
-    const cost = price(g);
-    const have = credits.balance;
-    const afford = have >= cost;
-    buying = afford ? g : null;
-    $("buy-title").textContent = afford ? `Buy the ${g.name}?` : "Not enough credits yet";
-    $("buy-text").textContent = afford
-      ? `It costs ${creditText(cost)} credits. You have ${creditText(have)}, so ${creditText(have - cost)} will be left.`
-      : `The ${g.name} costs ${creditText(cost)} credits. You have ${creditText(have)}, so you need ${creditText(cost - have)} more. Win races and beat your speed trap bests to earn them.`;
-    $("btn-buy").hidden = !afford;
-    $("btn-buy-cancel").textContent = afford ? "Not now" : "OK";
-    buyPanel.querySelector(".buy-buttons").classList.toggle("one", !afford);
-    buyPanel.hidden = false;
-  };
-  $("btn-buy-cancel").addEventListener("click", () => (buyPanel.hidden = true));
-  $("btn-buy").addEventListener("click", () => {
-    const g = buying;
-    buyPanel.hidden = true;
-    if (!g || !credits.buy(g)) return;
-    toast(`You bought the ${g.name}`);
-    drive(g, null);
-  });
   // The garage is laid out like a car show: brands down the side (with how
   // many of each), the kind of car and its country along the top, and a
   // choice of order. The real cars show their brand, model and year; every
@@ -913,12 +882,11 @@ async function start() {
   const SERVICE = "Service vehicles";
   const brandOf = (g) => g.brand ?? (g.kind === "service" ? SERVICE : OTHER);
   const SORTS = [
-    ["price", "Price"],
-    ["power", "Power"],
     ["name", "Name"],
+    ["power", "Power"],
     ["year", "Year"],
   ];
-  const show = { brand: null, kind: null, country: null, sort: "price" };
+  const show = { brand: null, kind: null, country: null, sort: "name" };
   const chip = (parent, label, on, onClick) => {
     const b = document.createElement("button");
     b.className = "pick" + (on ? " on" : "");
@@ -935,7 +903,6 @@ async function start() {
   };
   const sorted = (list) => {
     const by = {
-      price: (a, b) => price(a) - price(b) || figures(a).hp - figures(b).hp,
       power: (a, b) => figures(b).hp - figures(a).hp,
       name: (a, b) => a.name.localeCompare(b.name),
       year: (a, b) => (b.year ?? 0) - (a.year ?? 0) || a.name.localeCompare(b.name),
@@ -943,7 +910,6 @@ async function start() {
     return [...list].sort(by);
   };
   const renderGarage = () => {
-    $("garage-credits").textContent = `${creditText(credits.balance)} credits`;
     // Brands, with how many cars each has (the real brands A to Z, then the rest).
     const brands = $("garage-brands");
     brands.innerHTML = "";
@@ -993,10 +959,9 @@ async function start() {
     const cars = sorted(inBrand.filter((g) => (!show.kind || g.class === show.kind) && (!show.country || g.country === show.country)));
     $("garage-count").textContent = `${cars.length} ${cars.length === 1 ? "car" : "cars"}`;
     for (const g of cars) {
-      const locked = g !== carEntry && !credits.owns(g);
       const card = document.createElement("button");
-      card.className = "car-card" + (g === carEntry ? " on" : "") + (locked ? " locked" : "");
-      const tag = g === carEntry ? `<span class="tag now">Driving</span>` : locked ? `<span class="price">${LOCK}${creditText(price(g))} credits</span>` : `<span class="tag">${price(g) ? "Owned" : "Free"}</span>`;
+      card.className = "car-card" + (g === carEntry ? " on" : "");
+      const tag = g === carEntry ? `<span class="tag now">Driving</span>` : "";
       card.innerHTML = `
         <img class="thumb" src="assets/vehicles/thumbs/${g.model ?? "concept"}.webp" alt="" loading="lazy">
         <div class="brand"></div>
@@ -1007,7 +972,7 @@ async function start() {
       card.querySelector(".brand").textContent = g.brand ?? (g.kind === "service" ? "Service vehicle" : "Game car");
       card.querySelector(".name").textContent = g.brand ? g.modelName : g.name;
       card.querySelector(".trim").textContent = g.real ? `${g.year} · ${g.class} · ${g.country}` : `${g.trim} · ${g.electric ? "Electric" : "Petrol"}`;
-      card.addEventListener("click", () => (locked ? askToBuy(g) : drive(g, card)));
+      card.addEventListener("click", () => drive(g, card));
       list.appendChild(card);
     }
   };
@@ -1052,7 +1017,6 @@ async function start() {
     markSeg("seg-fuel", settings.fuelMode);
     markSeg("seg-fps", settings.showFps ? "on" : "off");
     markSeg("seg-sound", settings.sound ? "on" : "off");
-    markSeg("seg-unlock", settings.unlockAll ? "on" : "off");
     markSeg("seg-weather", weather.mode);
     $("graphics-note").textContent =
       settings.graphics === "auto" ? `Auto picked ${levelName(level)} for this device.` : "Changing this restarts the game.";
@@ -1087,7 +1051,6 @@ async function start() {
   });
   onSeg("seg-fps", (v) => (settings.showFps = v === "on"));
   onSeg("seg-sound", (v) => setSound(v === "on"));
-  onSeg("seg-unlock", (v) => (settings.unlockAll = v === "on"));
   onSeg("seg-weather", (v) => {
     weather.set(v);
     settings.weather = v;
@@ -1439,7 +1402,7 @@ async function start() {
       vehicle.place(x, z, Math.atan2(tx, tz));
       chase._first = true;
     };
-    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, show: finishShow, gateParts, credits, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
+    window.__game = { engine, scene, world, vehicle, chase, sky, csm, pipeline, nature, cover, input, step, placeOn, traffic, people, weather, audio, navigator, autodriver, daynight, nightLights, damage, lights, stations, fuel, refuel, landmarkModels, flags, setMode, get mode() { return mode; }, pickDestination, race, strips, dragParts, traps, townCameras, speedTraps, trapParts, rescue, photos, album, street, streetRaces, show: finishShow, gateParts, settings, GARAGE, swapCar, cabin, photo, get car() { return car; }, carFx, tyres, get edgeBlur() { return edgeBlur; } };
   }
 }
 

@@ -93,7 +93,7 @@ export function ordinal(n) {
 
 // The result card: the finish photo (when there is one), medal (or place),
 // title, a line under it, three numbers, everyone's places, times and gaps,
-// notes, credits won, and Leave / Race again.
+// notes, and Leave / Race again.
 export function resultCard({ onAgain, onLeave }) {
   const panel = el("div", "panel", `<div class="panel-card race-card race-result"></div>`);
   panel.hidden = true;
@@ -120,8 +120,8 @@ export function resultCard({ onAgain, onLeave }) {
     el: panel,
     // place: 0 on, or -1 if you didn't finish. stats: [[label, value] x3].
     // rows: [{ name, time (text), gap (text, optional), you }] in finishing
-    // order. credits: won this time (optional).
-    fill({ place, title, sub, stats, notes, rows, credits = 0 }) {
+    // order.
+    fill({ place, title, sub, stats, notes, rows }) {
       const medal = MEDALS[place] ?? "";
       card.innerHTML = `
       <div class="race-head">
@@ -131,7 +131,7 @@ export function resultCard({ onAgain, onLeave }) {
             <div class="race-medal ${medal}">${place < 0 ? "–" : (PLACES[place] ?? ordinal(place + 1))}</div>
             <div><h2>${title}</h2><p class="note">${sub}</p></div>
           </div>
-          ${notes.length || credits ? `<div class="race-foot">${credits ? `<span class="race-credits">+${credits} credits</span>` : ""}${notes.length ? `<p class="race-note">${notes.join(" ")}</p>` : ""}</div>` : ""}
+          ${notes.length ? `<div class="race-foot"><p class="race-note">${notes.join(" ")}</p></div>` : ""}
         </div>
       </div>
       <div class="race-stats">${stats.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join("")}</div>

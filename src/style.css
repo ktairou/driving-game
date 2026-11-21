@@ -1015,68 +1015,12 @@ button {
   opacity: 0.55;
 }
 
-/* Credits: the balance by the garage title, and the price on a locked card. */
+/* The garage title row. */
 .garage-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-}
-
-.credit-count {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--accent);
-  white-space: nowrap;
-}
-
-.car-card.locked .thumb {
-  opacity: 0.45;
-  filter: grayscale(0.7);
-}
-
-.car-card .price {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.car-card .price svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.buy-card {
-  width: min(420px, calc(100vw - 32px));
-}
-
-.buy-text {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.45;
-  color: var(--muted);
-}
-
-.buy-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.buy-buttons button {
-  padding: 14px;
-  font-size: 16px;
-}
-
-.buy-buttons button[hidden] {
-  display: none;
 }
 
 .garage-group {
@@ -1122,7 +1066,11 @@ button {
   margin-top: 8px;
 }
 
-/* "Owned", "Free" and "Driving": small chips (the price on a locked car has its own style). */
+.car-card .card-foot:empty {
+  display: none;
+}
+
+/* "Driving": a small chip on the car you are in. */
 .car-card .tag {
   padding: 3px 10px;
   border-radius: 999px;
@@ -1217,7 +1165,3 @@ button {
   }
 }
 
-/* Not enough credits: just the one button, full width. */
-.buy-buttons.one {
-  grid-template-columns: 1fr;
-}

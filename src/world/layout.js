@@ -282,7 +282,7 @@ export const SPEED_TRAPS = [
 // Speed cameras on the towns' main streets (70 km/h): the same camera on a
 // pole as the speed traps, standing at the pavement's edge, clear of parked
 // cars, lamps, flags, bins, bus stops and side streets. They only take
-// pictures (no bests or credits). { x, z } is a main-street road sample
+// pictures (no bests). { x, z } is a main-street road sample
 // (world coordinates, already stretched), `heading` the road's direction
 // there and `side` which side of it the pole stands (1 = right). Picked from
 // the kerb spots the street furniture leaves free (streetFurniture.js) and

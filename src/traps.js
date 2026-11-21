@@ -4,8 +4,8 @@ import { speedLimitAt } from "./world/trafficLights.js";
 // Speed traps: driving over a trap's line records your speed. Your best at
 // each trap is kept (in m/s, in settings.traps), and a banner shows what you
 // did. The camera flashes and takes your picture (speedPhotos.js) if you were
-// over the limit. The towns' speed cameras only do that last part: no bests,
-// credits or banner.
+// over the limit. The towns' speed cameras only do that last part: no bests
+// or banner.
 
 const MIN_SPEED = 5; // m/s: crawling over the line doesn't count
 const BANNER_FOR = 3.6; // seconds
@@ -14,7 +14,7 @@ const JUMP = 6; // metres more than your speed covers in a frame: you were put t
 
 export class SpeedTraps {
   // hooks: { active() -> are you driving the car yourself, entry() -> your
-  //   garage entry, earn(oldBest, newBest) -> credits added, flash(0..1),
+  //   garage entry, flash(0..1),
   //   photo(camera, speed, limit, end) (caught: `end` is which way you went, 1 or -1) }
   // cameras: the towns' speed cameras (layout.js TOWN_CAMERAS).
   constructor({ traps, cameras = [], vehicle, settings, save, hooks }) {
@@ -95,9 +95,8 @@ export class SpeedTraps {
     if (newBest) {
       rec.best = +speed.toFixed(2);
       rec.car = this.hooks.entry().id;
-      const earned = this.hooks.earn?.(old, speed) ?? 0;
       this.save(this.settings);
-      note = earned ? `New best! +${earned} credits` : "New best!";
+      note = "New best!";
     } else note = `Your best: ${this.speedText(old)}`;
     this.speedEl.textContent = this.speedText(speed);
     this.noteEl.textContent = note;

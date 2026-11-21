@@ -89,8 +89,7 @@ function nudgeEngine(spec, k, t0, time) {
 }
 
 // The `n` vehicles nearest yours in power for their weight (so a bus races
-// buses and vans, and a sports car races fast cars). Locked ones too: the
-// other drivers don't need to buy them. With `loaded(kind)` (is that kind of
+// buses and vans, and a sports car races fast cars). With `loaded(kind)` (is that kind of
 // vehicle on the roads already?), at most three other kinds are picked, and
 // none far off in power: past that the nearest come again, kinds loaded just
 // for the race first (they can be painted differently, see start()).
@@ -126,7 +125,7 @@ const shortName = (s) => {
 export class DragRace {
   // hooks: { entry() -> your garage entry, place(x, z, heading), toast(text),
   //   ready() -> may a race be offered now, onStart(), kinds: { load(id), release(ids) },
-  //   earn?(place, level) -> credits won, show?: the finish (finishShow.js) }
+  //   show?: the finish (finishShow.js) }
   constructor({ vehicle, traffic, audio, fuel, settings, save, boardTexture, hooks }) {
     Object.assign(this, { vehicle, traffic, audio, fuel, settings, save, boardTexture, hooks });
     this.state = "idle";
@@ -506,7 +505,6 @@ export class DragRace {
     const place = list.findIndex((r) => r.you);
     this.place = place;
     let newBest = false;
-    let earned = 0;
     if (!this.dnf) {
       const rec = (this.settings.races[s.id] ??= { best: null, cars: {} });
       rec.cars ??= {};
@@ -517,18 +515,17 @@ export class DragRace {
       const medal = MEDALS[place];
       if (medal && (!mine.medal || MEDALS.indexOf(medal) < MEDALS.indexOf(mine.medal))) mine.medal = medal;
       if (medal && (!rec.medal || MEDALS.indexOf(medal) < MEDALS.indexOf(rec.medal))) rec.medal = medal;
-      earned = this.hooks.earn?.(place, this.level) ?? 0;
       this.save(this.settings);
     }
     this.lastRuns[s.id] = [...list].sort((a, b) => a.lane - b.lane);
     this._drawBoard(s);
-    this._showResult(list, place, newBest, earned);
+    this._showResult(list, place, newBest);
     // The finish (finishShow.js): slow motion, your place, a photo, the top
     // three lined up... then it shows this card. Straight to it if you didn't finish.
-    this.resultIn = this.hooks.show?.finish("drag", this, list, place, { fmt, newBest, earned }) ? null : 1.3;
+    this.resultIn = this.hooks.show?.finish("drag", this, list, place, { fmt, newBest }) ? null : 1.3;
   }
 
-  _showResult(list, place, newBest, earned) {
+  _showResult(list, place, newBest) {
     const units = this.settings.units === "mph" ? ["mph", 2.23694] : ["km/h", 3.6];
     const winner = list[0];
     let gap;
@@ -548,7 +545,6 @@ export class DragRace {
         [place === 0 && !this.dnf ? "Gap" : "To the winner", gap],
       ],
       notes,
-      credits: earned,
       rows: list.map((r) => ({ name: r.name, time: Number.isFinite(r.time) ? fmt(r.time) : "--", gap: r !== winner && Number.isFinite(r.time) ? `+${(r.time - winner.time).toFixed(2)}` : "", you: r.you })),
     });
   }

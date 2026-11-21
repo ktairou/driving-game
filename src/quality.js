@@ -1,4 +1,3 @@
-import { STARTERS } from "./garage.js";
 
 // Graphics levels. "scale" is how many rendered pixels per screen point
 // (it is capped at the screen's real pixel density). "cover" is how many
@@ -14,10 +13,8 @@ export const LEVELS = ["low", "medium", "high"];
 const KEY = "drivingGame.settings.v1";
 // races: race results per drag strip or street race id, { best: { time, car }, cars: { [car id]: { time, medal } }, medal }.
 // traps: your best per speed trap id, { best (m/s), car }.
-// credits: won in races and at speed traps; unlocked: ids of the vehicles
-// you have (filled in on first load, below); unlockAll: every vehicle free to
-// drive (the switch in Settings).
-const DEFAULTS = { graphics: "auto", units: "kmh", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real", races: {}, raceLevel: "medium", traps: {}, credits: 0, unlocked: null, unlockAll: false };
+// Every vehicle is free to drive, so nothing is bought or unlocked.
+const DEFAULTS = { graphics: "auto", units: "kmh", showFps: true, cameraMode: 0, sound: true, weather: "sunny", car: "gt-red", hour: 10, fuel: 1, fuelMode: "real", races: {}, raceLevel: "medium", traps: {} };
 
 // The quarter-mile drag strips, since replaced by half-mile strips with ids
 // of their own: their results no longer mean anything, so they are dropped.
@@ -33,11 +30,10 @@ export function loadSettings() {
     settings.races = own(settings.races);
     for (const id of RETIRED_STRIPS) delete settings.races[id];
     settings.traps = own(settings.traps);
-    settings.credits = Number.isFinite(saved.credits) && saved.credits > 0 ? Math.floor(saved.credits) : 0;
-    settings.unlockAll = saved.unlockAll === true;
-    // The first time with credits (or if the list is broken): the free ones,
-    // plus whatever you were driving, so nothing you had is taken away.
-    settings.unlocked = Array.isArray(saved.unlocked) ? saved.unlocked.filter((id) => typeof id === "string") : [...new Set([...STARTERS, settings.car])];
+    // Credits and bought cars are gone (every car is free): drop them.
+    delete settings.credits;
+    delete settings.unlocked;
+    delete settings.unlockAll;
     // Speeds and limits show in km/h now (the signs read 70 in towns, 140
     // outside). Everyone is switched over once; after that the choice in
     // Settings sticks.
@@ -47,7 +43,7 @@ export function loadSettings() {
     }
     return settings;
   } catch {
-    return { ...DEFAULTS, races: {}, traps: {}, unlocked: [...STARTERS] };
+    return { ...DEFAULTS, races: {}, traps: {} };
   }
 }
 

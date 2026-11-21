@@ -43,8 +43,7 @@ const fmt = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")
 export class StreetRace {
   // hooks: { entry() -> your garage entry, place(x, z, heading), toast(text),
   //   ready() -> may a race be offered now, onStart(), guide(route, name) (null
-  //   to clear), kinds: { load(id), release(ids) }, earn?(place, level) -> credits,
-  //   show?: the finish (finishShow.js) }
+  //   to clear), kinds: { load(id), release(ids) }, show?: the finish (finishShow.js) }
   constructor({ world, navigator, vehicle, traffic, audio, fuel, settings, save, parts, hooks }) {
     Object.assign(this, { world, navigator, vehicle, traffic, audio, fuel, settings, save, parts, hooks });
     this.state = "idle";
@@ -584,7 +583,6 @@ export class StreetRace {
     const place = this.dnf ? -1 : list.findIndex((x) => x.you);
     this.place = Math.max(0, place);
     let newBest = false;
-    let earned = 0;
     if (!this.dnf) {
       const rec = (this.settings.races[r.id] ??= { best: null, cars: {} });
       rec.cars ??= {};
@@ -597,16 +595,15 @@ export class StreetRace {
         mine.medal = betterMedal(mine.medal, medal);
         rec.medal = betterMedal(rec.medal, medal);
       }
-      earned = this.hooks.earn?.(place, this.level) ?? 0;
       this.save(this.settings);
     }
-    this._showResult(list, place, newBest, earned);
+    this._showResult(list, place, newBest);
     // The finish (finishShow.js): slow motion, your place, a photo, the top
     // three lined up... then it shows this card. Straight to it if you're out of time.
-    this.resultIn = this.hooks.show?.finish("street", this, list, place, { fmt, newBest, earned }) ? null : 1.3;
+    this.resultIn = this.hooks.show?.finish("street", this, list, place, { fmt, newBest }) ? null : 1.3;
   }
 
-  _showResult(list, place, newBest, earned) {
+  _showResult(list, place, newBest) {
     const units = this.settings.units === "mph" ? ["mph", 2.23694] : ["km/h", 3.6];
     const winner = list[0];
     let gap;
@@ -626,7 +623,6 @@ export class StreetRace {
         [place === 0 ? "Gap" : "To the winner", gap],
       ],
       notes,
-      credits: earned,
       rows: list.map((x) => ({ name: x.name, time: Number.isFinite(x.time) ? fmt(x.time) : x.you ? "--" : "Still racing", gap: x !== winner && Number.isFinite(x.time) ? `+${(x.time - winner.time).toFixed(1)}` : "", you: x.you })),
     });
   }

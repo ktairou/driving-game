@@ -181,9 +181,8 @@
       <div class="panel-card garage-card">
         <div class="garage-head">
           <h2>Choose your car</h2>
-          <div id="garage-credits" class="credit-count"></div>
         </div>
-        <p class="note">Tap one to drive it. Win races and beat your speed trap bests to earn credits for the locked ones.</p>
+        <p class="note">Every car is free. Tap one to drive it.</p>
         <div class="garage-body">
           <nav id="garage-brands" class="garage-brands" aria-label="Brands"></nav>
           <div class="garage-main">
@@ -202,17 +201,6 @@
     </div>
 
     <!-- Buying a locked vehicle in the garage: one more tap to be sure. -->
-    <div id="buy-panel" class="panel" hidden>
-      <div class="panel-card buy-card">
-        <h2 id="buy-title">Buy this car?</h2>
-        <p id="buy-text" class="buy-text"></p>
-        <div class="buy-buttons">
-          <button id="btn-buy-cancel" class="secondary">Not now</button>
-          <button id="btn-buy" class="primary">Buy</button>
-        </div>
-      </div>
-    </div>
-
     <div id="settings" class="panel" hidden>
       <div class="panel-card">
         <h2>Settings</h2>
@@ -251,14 +239,6 @@
           <div class="label">Weather</div>
           <div class="seg seg-wrap" id="seg-weather"></div>
         </div>
-        <div class="row">
-          <div class="label">Unlock every car</div>
-          <div class="seg" id="seg-unlock">
-            <button data-v="off">Off</button>
-            <button data-v="on">On</button>
-          </div>
-        </div>
-        <p class="note">On: drive any car without buying it. Your credits stay as they are.</p>
         <div class="row">
           <div class="label">Frame rate counter</div>
           <div class="seg" id="seg-fps">
