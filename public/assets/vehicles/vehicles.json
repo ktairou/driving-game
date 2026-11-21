@@ -438,5 +438,905 @@
    2.75
   ],
   "tris": 6031
+ },
+ {
+  "id": "alfa-giulia-sprint",
+  "name": "Alfa Romeo Giulia Sprint",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.72,
+   1.32,
+   4.08
+  ],
+  "min": [
+   -0.86,
+   0,
+   -2.21
+  ],
+  "max": [
+   0.86,
+   1.32,
+   1.87
+  ],
+  "tris": 32169,
+  "lodTris": 5958,
+  "trisBefore": 110216,
+  "textureMB": 2.1,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.46,
+  "wheelRadius": 0.331
+ },
+ {
+  "id": "mercedes-amg-gt",
+  "name": "Mercedes-AMG GT",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.08,
+   1.28,
+   4.55
+  ],
+  "min": [
+   -1.03,
+   0,
+   -2.33
+  ],
+  "max": [
+   1.05,
+   1.28,
+   2.22
+  ],
+  "tris": 27726,
+  "lodTris": 6190,
+  "trisBefore": 175531,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.65,
+  "wheelRadius": 0.336
+ },
+ {
+  "id": "mini-cooper-s",
+  "name": "Mini Cooper S",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.88,
+   1.43,
+   3.71
+  ],
+  "min": [
+   -0.94,
+   0,
+   -1.8
+  ],
+  "max": [
+   0.94,
+   1.43,
+   1.91
+  ],
+  "tris": 26064,
+  "lodTris": 7265,
+  "trisBefore": 35119,
+  "textureMB": 1.7,
+  "lodTextureMB": 0.4,
+  "tailLamps": 4,
+  "flip": true,
+  "wheelbase": 2.48,
+  "wheelRadius": 0.311
+ },
+ {
+  "id": "ferrari-488-pista",
+  "name": "Ferrari 488 Pista",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.17,
+   1.07,
+   4.61
+  ],
+  "min": [
+   -1.08,
+   0,
+   -2.1
+  ],
+  "max": [
+   1.09,
+   1.07,
+   2.51
+  ],
+  "tris": 28006,
+  "lodTris": 7003,
+  "trisBefore": 119331,
+  "textureMB": 0.7,
+  "lodTextureMB": 0,
+  "tailLamps": 4,
+  "flip": true,
+  "wheelbase": 2.56,
+  "wheelRadius": 0.339
+ },
+ {
+  "id": "pagani-zonda-f",
+  "name": "Pagani Zonda F",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.16,
+   1.14,
+   4.44
+  ],
+  "min": [
+   -1.08,
+   0,
+   -2.08
+  ],
+  "max": [
+   1.08,
+   1.14,
+   2.36
+  ],
+  "tris": 23233,
+  "lodTris": 5752,
+  "trisBefore": 23233,
+  "textureMB": 0.8,
+  "lodTextureMB": 0.3,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.75,
+  "wheelRadius": 0.348
+ },
+ {
+  "id": "mercedes-g63",
+  "name": "Mercedes-AMG G63",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.97,
+   1.88,
+   4.87
+  ],
+  "min": [
+   -0.99,
+   0,
+   -2.49
+  ],
+  "max": [
+   0.99,
+   1.88,
+   2.38
+  ],
+  "tris": 9243,
+  "lodTris": 5383,
+  "trisBefore": 187887,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 3.19,
+  "wheelRadius": 0.409
+ },
+ {
+  "id": "audi-r8-v10",
+  "name": "Audi R8 V10",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.05,
+   1.27,
+   4.43
+  ],
+  "min": [
+   -1.01,
+   0,
+   -2.11
+  ],
+  "max": [
+   1.03,
+   1.27,
+   2.32
+  ],
+  "tris": 32387,
+  "lodTris": 7147,
+  "trisBefore": 216464,
+  "textureMB": 0.9,
+  "lodTextureMB": 0.5,
+  "tailLamps": 2,
+  "flip": true,
+  "wheelbase": 2.66,
+  "wheelRadius": 0.355
+ },
+ {
+  "id": "vw-golf-gti",
+  "name": "Volkswagen Golf GTI Mk8",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.11,
+   1.48,
+   4.29
+  ],
+  "min": [
+   -1.06,
+   0,
+   -2.09
+  ],
+  "max": [
+   1.05,
+   1.48,
+   2.2
+  ],
+  "tris": 25700,
+  "lodTris": 5272,
+  "trisBefore": 120640,
+  "textureMB": 2.8,
+  "lodTextureMB": 0.5,
+  "tailLamps": 2,
+  "flip": true,
+  "wheelbase": 2.64,
+  "wheelRadius": 0.328
+ },
+ {
+  "id": "mclaren-p1-gtr",
+  "name": "McLaren P1 GTR",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.98,
+   1.14,
+   4.6
+  ],
+  "min": [
+   -0.99,
+   0,
+   -2.2
+  ],
+  "max": [
+   0.99,
+   1.14,
+   2.4
+  ],
+  "tris": 32159,
+  "lodTris": 5963,
+  "trisBefore": 71888,
+  "textureMB": 3.5,
+  "lodTextureMB": 0.6,
+  "tailLamps": 3,
+  "flip": false,
+  "wheelbase": 2.61,
+  "wheelRadius": 0.324
+ },
+ {
+  "id": "nissan-gtr-r35",
+  "name": "Nissan GT-R R35",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.19,
+   1.32,
+   4.71
+  ],
+  "min": [
+   -1.09,
+   0,
+   -2.46
+  ],
+  "max": [
+   1.11,
+   1.32,
+   2.25
+  ],
+  "tris": 26222,
+  "lodTris": 4788,
+  "trisBefore": 279787,
+  "textureMB": 0.8,
+  "lodTextureMB": 0.1,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.72,
+  "wheelRadius": 0.354
+ },
+ {
+  "id": "toyota-supra-mk4",
+  "name": "Toyota Supra Mk4",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2,
+   1.28,
+   4.52
+  ],
+  "min": [
+   -1,
+   0,
+   -2.28
+  ],
+  "max": [
+   1,
+   1.28,
+   2.24
+  ],
+  "tris": 29696,
+  "lodTris": 5868,
+  "trisBefore": 225690,
+  "textureMB": 0.4,
+  "lodTextureMB": 0,
+  "tailLamps": 3,
+  "flip": false,
+  "wheelbase": 2.53,
+  "wheelRadius": 0.36
+ },
+ {
+  "id": "subaru-wrx-sti",
+  "name": "Subaru Impreza WRX STI",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2,
+   1.42,
+   4.42
+  ],
+  "min": [
+   -1,
+   0,
+   -2.13
+  ],
+  "max": [
+   1,
+   1.42,
+   2.29
+  ],
+  "tris": 34371,
+  "lodTris": 4660,
+  "trisBefore": 77062,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.47,
+  "wheelRadius": 0.3
+ },
+ {
+  "id": "ford-mustang-1965",
+  "name": "Ford Mustang convertible",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.82,
+   1.23,
+   4.61
+  ],
+  "min": [
+   -0.91,
+   0,
+   -2.43
+  ],
+  "max": [
+   0.91,
+   1.23,
+   2.18
+  ],
+  "tris": 27084,
+  "lodTris": 6052,
+  "trisBefore": 111811,
+  "textureMB": 1.7,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.72,
+  "wheelRadius": 0.297
+ },
+ {
+  "id": "dodge-challenger-srt",
+  "name": "Dodge Challenger SRT",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.14,
+   1.42,
+   5.02
+  ],
+  "min": [
+   -1.07,
+   0,
+   -2.58
+  ],
+  "max": [
+   1.07,
+   1.42,
+   2.44
+  ],
+  "tris": 35073,
+  "lodTris": 6081,
+  "trisBefore": 114010,
+  "textureMB": 1.4,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.96,
+  "wheelRadius": 0.371
+ },
+ {
+  "id": "koenigsegg-one1",
+  "name": "Koenigsegg One:1",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.2,
+   1.18,
+   4.5
+  ],
+  "min": [
+   -1.1,
+   0,
+   -2.22
+  ],
+  "max": [
+   1.1,
+   1.18,
+   2.28
+  ],
+  "tris": 25680,
+  "lodTris": 5222,
+  "trisBefore": 25680,
+  "textureMB": 0.7,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.66,
+  "wheelRadius": 0.338
+ },
+ {
+  "id": "porsche-911-gt3",
+  "name": "Porsche 911 GT3",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.98,
+   1.3,
+   4.56
+  ],
+  "min": [
+   -0.99,
+   0,
+   -2.28
+  ],
+  "max": [
+   0.99,
+   1.3,
+   2.28
+  ],
+  "tris": 26709,
+  "lodTris": 6364,
+  "trisBefore": 239088,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.46,
+  "wheelRadius": 0.356
+ },
+ {
+  "id": "toyota-ae86",
+  "name": "Toyota Sprinter Trueno GT-Apex AE86",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.81,
+   1.26,
+   4.18
+  ],
+  "min": [
+   -0.91,
+   0,
+   -2.17
+  ],
+  "max": [
+   0.91,
+   1.26,
+   2.01
+  ],
+  "tris": 36503,
+  "lodTris": 6747,
+  "trisBefore": 86513,
+  "textureMB": 2.3,
+  "lodTextureMB": 0.6,
+  "tailLamps": 2,
+  "flip": true,
+  "wheelbase": 2.37,
+  "wheelRadius": 0.272
+ },
+ {
+  "id": "honda-nsx-r",
+  "name": "Honda NSX-R",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.97,
+   1.14,
+   4.43
+  ],
+  "min": [
+   -0.98,
+   0,
+   -2.23
+  ],
+  "max": [
+   0.99,
+   1.14,
+   2.2
+  ],
+  "tris": 34493,
+  "lodTris": 6207,
+  "trisBefore": 51302,
+  "textureMB": 1.4,
+  "lodTextureMB": 0.2,
+  "tailLamps": 2,
+  "flip": true,
+  "wheelbase": 2.55,
+  "wheelRadius": 0.302
+ },
+ {
+  "id": "mazda-rx7",
+  "name": "Mazda RX-7 (FD)",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.1,
+   1.26,
+   4.29
+  ],
+  "min": [
+   -1.09,
+   0,
+   -2.22
+  ],
+  "max": [
+   1.01,
+   1.26,
+   2.07
+  ],
+  "tris": 22801,
+  "lodTris": 4412,
+  "trisBefore": 361450,
+  "textureMB": 1.7,
+  "lodTextureMB": 0,
+  "tailLamps": 3,
+  "flip": false,
+  "wheelbase": 2.42,
+  "wheelRadius": 0.351
+ },
+ {
+  "id": "mitsubishi-evo-ix",
+  "name": "Mitsubishi Lancer Evolution IX",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.98,
+   1.52,
+   4.49
+  ],
+  "min": [
+   -0.99,
+   0,
+   -2.25
+  ],
+  "max": [
+   0.99,
+   1.52,
+   2.24
+  ],
+  "tris": 30934,
+  "lodTris": 5644,
+  "trisBefore": 325729,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.64,
+  "wheelRadius": 0.337
+ },
+ {
+  "id": "ferrari-250-gto",
+  "name": "Ferrari 250 GTO",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.61,
+   1.15,
+   4.33
+  ],
+  "min": [
+   -0.81,
+   0,
+   -2.25
+  ],
+  "max": [
+   0.81,
+   1.15,
+   2.08
+  ],
+  "tris": 29542,
+  "lodTris": 5207,
+  "trisBefore": 46015,
+  "textureMB": 1.8,
+  "lodTextureMB": 0.5,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.32,
+  "wheelRadius": 0.302
+ },
+ {
+  "id": "lamborghini-gallardo",
+  "name": "Lamborghini Gallardo",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.22,
+   1.14,
+   4.35
+  ],
+  "min": [
+   -1.11,
+   0,
+   -2.01
+  ],
+  "max": [
+   1.11,
+   1.14,
+   2.34
+  ],
+  "tris": 28957,
+  "lodTris": 6218,
+  "trisBefore": 154698,
+  "textureMB": 1.9,
+  "lodTextureMB": 0.2,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.54,
+  "wheelRadius": 0.322
+ },
+ {
+  "id": "fiat-500",
+  "name": "Fiat Nuova 500 F",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.31,
+   1.36,
+   2.95
+  ],
+  "min": [
+   -0.65,
+   0,
+   -1.54
+  ],
+  "max": [
+   0.65,
+   1.36,
+   1.42
+  ],
+  "tris": 27458,
+  "lodTris": 6554,
+  "trisBefore": 48844,
+  "textureMB": 1.8,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 1.83,
+  "wheelRadius": 0.246
+ },
+ {
+  "id": "porsche-918",
+  "name": "Porsche 918 Spyder",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.43,
+   1.16,
+   4.64
+  ],
+  "min": [
+   -1.07,
+   0,
+   -2.23
+  ],
+  "max": [
+   1.36,
+   1.16,
+   2.41
+  ],
+  "tris": 31065,
+  "lodTris": 6877,
+  "trisBefore": 306716,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.71,
+  "wheelRadius": 0.369
+ },
+ {
+  "id": "bmw-m5-e39",
+  "name": "BMW M5 E39",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2,
+   1.43,
+   4.78
+  ],
+  "min": [
+   -1,
+   0,
+   -2.51
+  ],
+  "max": [
+   1,
+   1.43,
+   2.27
+  ],
+  "tris": 30685,
+  "lodTris": 8081,
+  "trisBefore": 286684,
+  "textureMB": 0.2,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": true,
+  "wheelbase": 2.84,
+  "wheelRadius": 0.334
+ },
+ {
+  "id": "audi-quattro",
+  "name": "Audi Quattro",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.84,
+   1.31,
+   4.4
+  ],
+  "min": [
+   -0.92,
+   0,
+   -2.21
+  ],
+  "max": [
+   0.92,
+   1.31,
+   2.19
+  ],
+  "tris": 27390,
+  "lodTris": 6758,
+  "trisBefore": 148992,
+  "textureMB": 1.4,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.51,
+  "wheelRadius": 0.315
+ },
+ {
+  "id": "jaguar-e-type",
+  "name": "Jaguar E-Type",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.71,
+   1.25,
+   4.45
+  ],
+  "min": [
+   -0.86,
+   0,
+   -2.29
+  ],
+  "max": [
+   0.86,
+   1.25,
+   2.16
+  ],
+  "tris": 27062,
+  "lodTris": 5510,
+  "trisBefore": 125527,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.41,
+  "wheelRadius": 0.345
+ },
+ {
+  "id": "lexus-lfa",
+  "name": "Lexus LFA",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.07,
+   1.23,
+   4.51
+  ],
+  "min": [
+   -1.03,
+   0,
+   -2.3
+  ],
+  "max": [
+   1.03,
+   1.23,
+   2.21
+  ],
+  "tris": 28292,
+  "lodTris": 6083,
+  "trisBefore": 89006,
+  "textureMB": 2.6,
+  "lodTextureMB": 0.6,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.61,
+  "wheelRadius": 0.326
+ },
+ {
+  "id": "chevrolet-impala-1967",
+  "name": "Chevrolet Impala",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.02,
+   1.57,
+   5.41
+  ],
+  "min": [
+   -1.01,
+   0,
+   -3
+  ],
+  "max": [
+   1.01,
+   1.57,
+   2.41
+  ],
+  "tris": 29170,
+  "lodTris": 5669,
+  "trisBefore": 38799,
+  "textureMB": 1.4,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 3,
+  "wheelRadius": 0.333
+ },
+ {
+  "id": "tesla-model-3",
+  "name": "Tesla Model 3",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.09,
+   1.46,
+   4.69
+  ],
+  "min": [
+   -1.05,
+   0,
+   -2.42
+  ],
+  "max": [
+   1.05,
+   1.46,
+   2.27
+  ],
+  "tris": 35244,
+  "lodTris": 5546,
+  "trisBefore": 247356,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.95,
+  "wheelRadius": 0.367
  }
 ]

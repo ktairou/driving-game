@@ -201,11 +201,15 @@ function survey(body, meshes, g) {
   let D = clamp((H + tanD(20) * L) / (tanD(14) + tanD(20)), 0.55, 1.3);
   let ey = B.y + Math.max(D * tanD(14), Math.min(0.6 * H, H - (D - L) * tanD(20)));
   let roof = ey + 0.3;
+  let open = true; // no roof found over the head: a convertible with its top down
   // Keep the head under the roof; a low roof (a sports car) moves the seat
   // forward instead, so the dash still sits low in the view.
   for (let i = 0; i < 2; i++) {
     const up = cast(ex, ey, B.z - D, 0, 1, 0);
-    if (up.kind) roof = up.y;
+    if (up.kind) {
+      roof = up.y;
+      open = false;
+    }
     ey = Math.min(ey, roof - 0.08);
     D = clamp(Math.min(D, (ey - B.y) / tanD(14)), 0.55, 1.3);
   }
@@ -322,6 +326,7 @@ function survey(body, meshes, g) {
     aB,
     aT,
     roof,
+    open,
     hw,
     pillars,
     sills,
@@ -475,9 +480,11 @@ export class Cabin {
 
   // The tinted windows darken the whole view from inside, so they go while
   // you sit there (the downloaded vehicles only; the concept car keeps its own).
+  // A real car's own inside goes too: the kit is its cockpit, as in every
+  // other vehicle (the two together would clash).
   _glass(car, visible) {
     if (!car.cockpit) return;
-    for (const m of car.meshes) if (/^car_Glass/.test(m.name)) m.isVisible = visible;
+    for (const m of car.meshes) if (/^car_(Glass|Interior)/.test(m.name)) m.isVisible = visible;
   }
 
   // Every frame while shown.
@@ -673,14 +680,14 @@ export class Cabin {
     if (f.pillars.centre) pillar(f.pillars.centre, 1);
 
     // Roof lining along the top of the windscreen, and the sun visors folded
-    // up flat against it (only their front edges show).
+    // up flat against it (only their front edges show). None with the top down.
     const roofY = Math.max(f.roof - 0.02, T.y + 0.03);
     const backZ = Math.min(ez + 0.05, T.z - 0.1);
     const lining = [[T.y - 0.014, T.z - 0.012], [T.y + 0.006, T.z - 0.045], [roofY, backZ]];
-    kit.sheet(lining.map(([y, z]) => across.map((x) => [x, y, z])), LINING);
+    if (!f.open) kit.sheet(lining.map(([y, z]) => across.map((x) => [x, y, z])), LINING);
     const [, l1, l2] = lining;
     const run = normalize([0, l2[0] - l1[0], l2[1] - l1[1]]);
-    if (run[2] < -0.3) {
+    if (run[2] < -0.3 && !f.open) {
       const v0 = [0, l1[0] - 0.014, l1[1] - 0.012];
       const half = scale(run, 0.085);
       for (const vx of [ex, -ex]) {

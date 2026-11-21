@@ -274,9 +274,13 @@ export function setPaint(car, color) {
 
 export const tmpV = new Vector3();
 
-// --- The downloaded vehicles (tools/prepare-models.mjs) ----------------------------
+// --- The downloaded vehicles (tools/prepare-models.mjs, tools/prepare-cars.mjs) ---
 // Each one stands on the origin facing +Z: a body in a few parts (paint,
-// glass, lights...) and separate wheels named wheel_N.
+// glass, lights...) and separate wheels named wheel_N. The real cars also have
+// an `interior` (seen through the windows; hidden from the driver's seat,
+// where the cockpit kit is drawn instead), brake calipers named caliper_N
+// (they steer with wheel N but don't spin), and their tail lamps worked out
+// already (in the body's glTF extras).
 
 const vehicleOptions = {
   pluginOptions: { gltf: { createInstances: false, extensionOptions: { KHR_materials_transmission: { enabled: false } } } },
@@ -301,9 +305,10 @@ function prepareVehicleMaterials(materials) {
 // From the driver's seat, can you see the road behind through the back of
 // the vehicle? Rays from the head (turned and leaning in, as when looking
 // behind) towards the back; glass lets them through, anything else blocks.
-// A car's back window is clear; a lorry's cab or a bus is a wall.
+// A car's back window is clear; a lorry's cab or a bus is a wall. (A real
+// car's seats don't count: they are hidden from the driver's seat.)
 function seesBehind(meshes, eye, length) {
-  const solid = meshes.filter((m) => !/glass/i.test(m.material?.name ?? "") && m.getTotalVertices() > 0);
+  const solid = meshes.filter((m) => !/glass/i.test(m.material?.name ?? "") && !/^car_Interior/.test(m.name) && m.getTotalVertices() > 0);
   for (const m of solid) m.computeWorldMatrix(true);
   const from = new Vector3(eye.x * 0.5, eye.y + 0.04, eye.z);
   let open = 0;
@@ -316,6 +321,21 @@ function seesBehind(meshes, eye, length) {
     }
   }
   return open / n >= 0.5;
+}
+
+// A spot a little above the top of the bonnet, half way between the front
+// wheels and the windscreen: found by looking straight down onto the car.
+function overBonnet(meshes, geometry, height) {
+  const solid = meshes.filter((m) => !/glass/i.test(m.material?.name ?? "") && m.getTotalVertices() > 0);
+  for (const m of solid) m.computeWorldMatrix(true);
+  const z = geometry.frontZ - 0.5;
+  const ray = new Ray(new Vector3(0, height + 2, z), new Vector3(0, -1, 0), height + 3);
+  let top = height * 0.6;
+  for (const m of solid) {
+    const hit = ray.intersectsMesh(m, false);
+    if (hit.hit) top = Math.max(top, ray.origin.y - hit.distance);
+  }
+  return new Vector3(0, top + 0.4, z);
 }
 
 const boundsOf = (meshes) => {
@@ -344,6 +364,7 @@ export async function loadVehicle(scene, id, onProgress) {
   body.parent = root;
   gltfRoot.parent = body;
   const parts = result.meshes.filter((m) => m.getTotalVertices() > 0);
+  const known = knownLamps(result);
   const materials = new Set(parts.map((m) => m.material).filter(Boolean));
   const head = prepareVehicleMaterials(materials);
   // Lighter windows on the one you drive, so the view from the driver's seat isn't dark.
@@ -358,7 +379,7 @@ export async function loadVehicle(scene, id, onProgress) {
     groups.get(k).push(m);
   }
   const wheels = [];
-  for (const list of groups.values()) {
+  for (const [k, list] of groups) {
     const { min, max } = boundsOf(list);
     const c = min.add(max).scale(0.5);
     const steer = new TransformNode("wheelSteer", scene);
@@ -367,7 +388,13 @@ export async function loadVehicle(scene, id, onProgress) {
     const spin = new TransformNode("wheelSpin", scene);
     spin.parent = steer;
     for (const m of list) m.setParent(spin);
-    wheels.push({ front: c.z > 0, left: c.x < 0, steer, spin, rest: c.clone(), offset: 0, radius: (max.y - min.y) / 2 });
+    wheels.push({ front: c.z > 0, left: c.x < 0, steer, spin, rest: c.clone(), offset: 0, radius: (max.y - min.y) / 2, key: k });
+  }
+  // Brake calipers turn with their wheel's steering, but don't spin.
+  for (const m of parts) {
+    const k = /^caliper_(\d+)/.exec(m.name)?.[1];
+    const w = k !== undefined && wheels.find((w) => w.key === k);
+    if (w) m.setParent(w.steer);
   }
   // Front left, front right, rear left, rear right first (they follow the ground
   // under those corners); any extra rear wheels after.
@@ -377,17 +404,21 @@ export async function loadVehicle(scene, id, onProgress) {
   const meshes = [];
   const shadowMeshes = [];
   parts.forEach((m, i) => {
-    if (!/^wheel_/.test(m.name)) {
+    const inside = /^interior/.test(m.name);
+    if (!/^(wheel|caliper)_/.test(m.name)) {
       const mat = m.material?.name ?? "";
-      // Named so crash dents work on them (see car/damage.js).
-      m.name = /glass/i.test(mat) ? `car_Glass_${i}` : /optic/i.test(mat) ? `car_Headlight_${i}` : `car_Panel_${i}`;
+      // Named so crash dents work on them (see car/damage.js); the inside isn't dented.
+      m.name = inside ? `car_Interior_${i}` : /glass/i.test(mat) ? `car_Glass_${i}` : /optic/i.test(mat) ? `car_Headlight_${i}` : `car_Panel_${i}`;
       m.setParent(body);
     }
     m.isPickable = false;
     m.receiveShadows = true;
     meshes.push(m);
-    if (!/glass/i.test(m.material?.name ?? "")) shadowMeshes.push(m);
+    // (The inside is in the body's shadow anyway.)
+    if (!/glass/i.test(m.material?.name ?? "") && !inside && !/^caliper_/.test(m.name)) shadowMeshes.push(m);
   });
+  // (The empty glTF nodes the parts hung from go too, or each swap would leave some behind.)
+  for (const n of [...result.transformNodes, ...result.meshes]) if (n !== gltfRoot && !parts.includes(n)) n.dispose(true);
   gltfRoot.dispose(true, false);
 
   const { min, max } = boundsOf(meshes);
@@ -411,14 +442,18 @@ export async function loadVehicle(scene, id, onProgress) {
   // car/cabin.js); the old rule of thumb if no windscreen can be found.
   const big = length > 6.2;
   const cockpit = measureCockpit(id, body, meshes, geometry);
-  const eye = cockpit ? cockpit.eye.clone() : new Vector3(0, height * (big ? 0.78 : 0.86), big ? max.z - 1.1 : geometry.frontZ - 1.2);
+  const bonnet = big ? new Vector3(0, height * 0.55, max.z + 0.25) : new Vector3(0, height * 0.8, geometry.frontZ - 0.1);
+  // (A real car whose windows can't be told apart, so has no cockpit kit, is
+  // driven from just above its bonnet, in front of the windscreen: its own
+  // inside would fill the view.)
+  const eye = cockpit ? cockpit.eye.clone() : known ? overBonnet(meshes, geometry, height) : new Vector3(0, height * (big ? 0.78 : 0.86), big ? max.z - 1.1 : geometry.frontZ - 1.2);
   if (cockpit && !cockpit.paint) {
     // (Given a moment at most: a plain dark grey will do otherwise.)
     const timeout = new Promise((r) => setTimeout(() => r(null), 1500));
     cockpit.paint = await Promise.race([samplePaint(body, meshes, cockpit), timeout]).catch(() => null);
   }
   const views = {
-    bonnet: big ? new Vector3(0, height * 0.55, max.z + 0.25) : new Vector3(0, height * 0.8, geometry.frontZ - 0.1),
+    bonnet,
     bumper: new Vector3(0, Math.min(0.6, height * 0.3), max.z + 0.15),
     // Looking behind from the bonnet or bumper view: just off the back, facing back.
     rear: new Vector3(0, Math.min(1.4, Math.max(0.8, height * 0.5)), min.z - 0.2),
@@ -426,7 +461,7 @@ export async function loadVehicle(scene, id, onProgress) {
   // (If not, looking behind from the driver's seat uses that rear view too.)
   views.seesBehind = seesBehind(meshes, eye, length);
   // Where its tail lamps are, for the brake lights.
-  const tailLamps = await findTailLamps(meshes);
+  const tailLamps = known ?? (await findTailLamps(meshes));
   return {
     id,
     root,
@@ -448,16 +483,26 @@ export async function loadVehicle(scene, id, onProgress) {
   };
 }
 
+// The tail lamps tools/prepare-cars.mjs worked out (null for the other vehicles).
+function knownLamps(result) {
+  for (const n of [...result.transformNodes, ...result.meshes]) {
+    const lamps = n.metadata?.gltf?.extras?.tailLamps;
+    if (lamps) return lamps;
+  }
+  return null;
+}
+
 // The traffic version: the whole vehicle as one mesh (one piece per material),
-// ready to be drawn many times at once. Also gives its size.
-export async function loadVehicleLod(scene, id) {
-  const result = await ImportMeshAsync(`assets/vehicles/${id}.glb`, scene, vehicleOptions);
+// ready to be drawn many times at once. Also gives its size. `file` is a
+// lighter copy where there is one (the real cars' <id>_lod).
+export async function loadVehicleLod(scene, id, file = id) {
+  const result = await ImportMeshAsync(`assets/vehicles/${file}.glb`, scene, vehicleOptions);
   const gltfRoot = result.meshes[0];
   const parts = result.meshes.filter((m) => m.getTotalVertices() > 0);
   const materials = new Set(parts.map((m) => m.material).filter(Boolean));
   const lights = prepareVehicleMaterials(materials);
   const { min, max } = boundsOf(parts);
-  const tailLamps = await findTailLamps(parts);
+  const tailLamps = knownLamps(result) ?? (await findTailLamps(parts));
   const mesh = mergeParts(parts, true);
   mesh.name = `traffic_${id}`;
   gltfRoot.dispose();

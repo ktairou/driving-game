@@ -31,7 +31,7 @@ import { Traffic, TRAFFIC_MIX } from "./traffic.js";
 import { People } from "./people.js";
 import { Navigator, AutoDriver } from "./navigation.js";
 import { renderMapImage, MiniMap, BigMap, PLACES, setFuelStations } from "./map.js";
-import { GARAGE, stats, applyPaint, price } from "./garage.js";
+import { GARAGE, REAL, applyPaint, price, figures } from "./garage.js";
 import { Credits, raceReward, trapReward, credits as creditText } from "./credits.js";
 import { DayNight, TIME_PRESETS } from "./daynight.js";
 import { NightLights } from "./nightlights.js";
@@ -187,14 +187,18 @@ async function start() {
 
   setProgress(0.7, "Filling the roads…");
   const lod = await loadCarLod(scene);
+  // The real cars are drawn in traffic (and as race rivals) from their light copy.
+  const lodFile = (id) => (REAL.some((g) => g.model === id) ? `${id}_lod` : id);
   // All kinds of vehicle only on the High setting; each kind costs graphics
   // memory, and an iPad (Medium on Auto) closes the page if that runs out.
-  const mix = TRAFFIC_MIX.filter((t) => level === "high" || !t.more);
+  // (High also has a few everyday real cars about: those marked `traffic` in tools/cars.json.)
+  const realTraffic = REAL.filter((g) => g.traffic).map((g) => ({ id: g.model, weight: 0.7, parked: true, more: true }));
+  const mix = [...TRAFFIC_MIX, ...realTraffic].filter((t) => level === "high" || !t.more);
   let loadedKinds = 0;
   const kinds = await Promise.all(
     mix.map(async (t) => {
       try {
-        const v = await loadVehicleLod(scene, t.id);
+        const v = await loadVehicleLod(scene, t.id, lodFile(t.id));
         setProgress(0.7 + (++loadedKinds / mix.length) * 0.15, "Filling the roads…");
         return { ...t, ...v };
       } catch (err) {
@@ -312,7 +316,7 @@ async function start() {
   const trafficKind = async (id) => {
     if (traffic.type(id)) return id;
     try {
-      const v = await loadVehicleLod(scene, id);
+      const v = await loadVehicleLod(scene, id, lodFile(id));
       traffic.addType({ id, ...v });
       nightLights.addTrafficLights(v.lights);
       csm.addShadowCaster(v.mesh, false);
@@ -901,33 +905,128 @@ async function start() {
     toast(`You bought the ${g.name}`);
     drive(g, null);
   });
+  // The garage is laid out like a car show: brands down the side (with how
+  // many of each), the kind of car and its country along the top, and a
+  // choice of order. The real cars show their brand, model and year; every
+  // card shows power, 0-100 (or 0-60) and top speed as the game drives it.
+  const OTHER = "Other cars";
+  const SERVICE = "Service vehicles";
+  const brandOf = (g) => g.brand ?? (g.kind === "service" ? SERVICE : OTHER);
+  const SORTS = [
+    ["price", "Price"],
+    ["power", "Power"],
+    ["name", "Name"],
+    ["year", "Year"],
+  ];
+  const show = { brand: null, kind: null, country: null, sort: "price" };
+  const chip = (parent, label, on, onClick) => {
+    const b = document.createElement("button");
+    b.className = "pick" + (on ? " on" : "");
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    parent.appendChild(b);
+  };
+  const statLine = (g) => {
+    const p = figures(g);
+    const mph = settings.units === "mph";
+    const top = mph ? `${Math.round(p.topKmh * 0.621371)} mph` : `${p.topKmh} km/h`;
+    const sprint = mph ? `0–${p.slow ? 50 : 60} in ${p.zeroTo60.toFixed(1)}` : `0–${p.slow ? 80 : 100} in ${p.zeroTo100.toFixed(1)}`;
+    return `${p.hp.toLocaleString("en-GB")} hp · ${sprint} s · ${top}`;
+  };
+  const sorted = (list) => {
+    const by = {
+      price: (a, b) => price(a) - price(b) || figures(a).hp - figures(b).hp,
+      power: (a, b) => figures(b).hp - figures(a).hp,
+      name: (a, b) => a.name.localeCompare(b.name),
+      year: (a, b) => (b.year ?? 0) - (a.year ?? 0) || a.name.localeCompare(b.name),
+    }[show.sort];
+    return [...list].sort(by);
+  };
   const renderGarage = () => {
     $("garage-credits").textContent = `${creditText(credits.balance)} credits`;
+    // Brands, with how many cars each has (the real brands A to Z, then the rest).
+    const brands = $("garage-brands");
+    brands.innerHTML = "";
+    const count = new Map();
+    for (const g of GARAGE) count.set(brandOf(g), (count.get(brandOf(g)) ?? 0) + 1);
+    const names = [...count.keys()].filter((b) => b !== OTHER && b !== SERVICE).sort((a, b) => a.localeCompare(b));
+    const brandButton = (label, value, n) => {
+      const b = document.createElement("button");
+      if (show.brand === value) b.className = "on";
+      const name = document.createElement("span");
+      name.textContent = label;
+      const many = document.createElement("small");
+      many.textContent = n;
+      b.append(name, many);
+      b.addEventListener("click", () => {
+        show.brand = value;
+        renderGarage();
+        $("garage-list").scrollTop = 0;
+      });
+      brands.appendChild(b);
+    };
+    brandButton("All cars", null, GARAGE.length);
+    for (const name of [...names, OTHER, SERVICE]) if (count.has(name)) brandButton(name, name, count.get(name));
+
+    // Kind of car and country: only the ones the chosen brand has.
+    const inBrand = GARAGE.filter((g) => !show.brand || brandOf(g) === show.brand);
+    const kinds = [...new Set(inBrand.map((g) => g.class).filter(Boolean))].sort();
+    const countries = [...new Set(inBrand.map((g) => g.country).filter(Boolean))].sort();
+    if (show.kind && !kinds.includes(show.kind)) show.kind = null;
+    if (show.country && !countries.includes(show.country)) show.country = null;
+    const kindRow = $("garage-kinds");
+    kindRow.innerHTML = "";
+    kindRow.hidden = kinds.length < 2;
+    chip(kindRow, "Every kind", !show.kind, () => ((show.kind = null), renderGarage()));
+    for (const k of kinds) chip(kindRow, k, show.kind === k, () => ((show.kind = k), renderGarage()));
+    const countryRow = $("garage-countries");
+    countryRow.innerHTML = "";
+    countryRow.hidden = countries.length < 2;
+    chip(countryRow, "Every country", !show.country, () => ((show.country = null), renderGarage()));
+    for (const c of countries) chip(countryRow, c, show.country === c, () => ((show.country = c), renderGarage()));
+    const sortRow = $("garage-sort");
+    sortRow.innerHTML = "";
+    for (const [k, label] of SORTS) chip(sortRow, label, show.sort === k, () => ((show.sort = k), renderGarage()));
+
     const list = $("garage-list");
     list.innerHTML = "";
-    let lastKind = null;
-    for (const g of GARAGE) {
-      if (g.kind !== lastKind) {
-        lastKind = g.kind;
-        const head = document.createElement("div");
-        head.className = "garage-group";
-        head.textContent = g.kind === "service" ? "Service vehicles" : "Cars";
-        list.appendChild(head);
-      }
-      const s = stats(g);
+    const cars = sorted(inBrand.filter((g) => (!show.kind || g.class === show.kind) && (!show.country || g.country === show.country)));
+    $("garage-count").textContent = `${cars.length} ${cars.length === 1 ? "car" : "cars"}`;
+    for (const g of cars) {
       const locked = g !== carEntry && !credits.owns(g);
       const card = document.createElement("button");
       card.className = "car-card" + (g === carEntry ? " on" : "") + (locked ? " locked" : "");
+      const tag = g === carEntry ? `<span class="tag now">Driving</span>` : locked ? `<span class="price">${LOCK}${creditText(price(g))} credits</span>` : `<span class="tag">${price(g) ? "Owned" : "Free"}</span>`;
       card.innerHTML = `
         <img class="thumb" src="assets/vehicles/thumbs/${g.model ?? "concept"}.webp" alt="" loading="lazy">
-        <div class="name">${g.name}</div>
-        <div class="trim">${g.trim} · ${g.electric ? "Electric" : "Petrol"}</div>
-        ${["speed", "acceleration", "grip"].map((k) => `<div class="stat">${k[0].toUpperCase() + k.slice(1)}<span class="bar"><i style="width:${Math.round(s[k] * 100)}%"></i></span></div>`).join("")}
-        ${locked ? `<div class="price">${LOCK}${creditText(price(g))} credits</div>` : ""}`;
+        <div class="brand"></div>
+        <div class="name"></div>
+        <div class="trim"></div>
+        <div class="figures">${statLine(g)}</div>
+        <div class="card-foot">${tag}</div>`;
+      card.querySelector(".brand").textContent = g.brand ?? (g.kind === "service" ? "Service vehicle" : "Game car");
+      card.querySelector(".name").textContent = g.brand ? g.modelName : g.name;
+      card.querySelector(".trim").textContent = g.real ? `${g.year} · ${g.class} · ${g.country}` : `${g.trim} · ${g.electric ? "Electric" : "Petrol"}`;
       card.addEventListener("click", () => (locked ? askToBuy(g) : drive(g, card)));
       list.appendChild(card);
     }
   };
+  // The real cars' credits, in the Settings panel (from the same list as the garage).
+  for (const g of REAL) {
+    const c = g.credit;
+    const link = (text, url) => {
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = text;
+      return a;
+    };
+    const li = document.createElement("li");
+    li.append(`${g.name}: "`, link(c.title, c.url), `" by ${c.author} (${c.license})`);
+    if (c.via) li.append(`, from a copy uploaded as "`, link(c.via.title, c.via.url), `" by ${c.via.author}`);
+    $("credit-cars").appendChild(li);
+  }
   $("btn-garage").addEventListener("click", () => {
     endRaces();
     renderGarage();

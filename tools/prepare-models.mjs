@@ -291,7 +291,10 @@ async function vehicles() {
     manifest.push({ id: info[0], name: info[1], pack: "service", wheels: wheels.length, size: b.max.map((v, i) => +(v - b.min[i]).toFixed(2)), min: b.min.map((v) => +v.toFixed(2)), max: b.max.map((v) => +v.toFixed(2)), tris: tris(doc) });
     console.log("vehicle", info[0], manifest.at(-1).size.join(" x "));
   }
-  await writeFile(path.join(outVehicles, "vehicles.json"), JSON.stringify(manifest, null, 1));
+  // (The real cars, from tools/prepare-cars.mjs, are kept.)
+  const old = JSON.parse(await readFile(path.join(outVehicles, "vehicles.json"), "utf8").catch(() => "[]"));
+  const others = old.filter((e) => e.pack !== "passenger" && e.pack !== "service");
+  await writeFile(path.join(outVehicles, "vehicles.json"), JSON.stringify([...manifest, ...others], null, 1));
 }
 
 // --- Landmarks -----------------------------------------------------------------------

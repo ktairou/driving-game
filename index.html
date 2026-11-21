@@ -183,8 +183,20 @@
           <h2>Choose your car</h2>
           <div id="garage-credits" class="credit-count"></div>
         </div>
-        <p class="note">Tap one to drive it. Buses and lorries are slow and heavy. Win races to earn credits for the locked ones.</p>
-        <div id="garage-list" class="garage-list"></div>
+        <p class="note">Tap one to drive it. Win races and beat your speed trap bests to earn credits for the locked ones.</p>
+        <div class="garage-body">
+          <nav id="garage-brands" class="garage-brands" aria-label="Brands"></nav>
+          <div class="garage-main">
+            <div id="garage-kinds" class="pick-row"></div>
+            <div id="garage-countries" class="pick-row"></div>
+            <div class="garage-order">
+              <span id="garage-count" class="garage-count"></span>
+              <span class="garage-order-label">Order by</span>
+              <div id="garage-sort" class="pick-row"></div>
+            </div>
+            <div id="garage-list" class="garage-list"></div>
+          </div>
+        </div>
         <button id="btn-garage-close" class="close">Back to driving</button>
       </div>
     </div>
@@ -273,6 +285,8 @@
             <li>"<a href="https://sketchfab.com/3d-models/empire-state-building-2174e71baa1d43e896461ed149dad54a" target="_blank" rel="noopener">Empire State Building</a>" by <a href="https://sketchfab.com/NanoRay" target="_blank" rel="noopener">NanoRay</a></li>
             <li>"<a href="https://sketchfab.com/3d-models/mt-rushmore-d19d9343b00048fa81ef8cb3fdf142c9" target="_blank" rel="noopener">Mt Rushmore</a>" by <a href="https://sketchfab.com/artist88mcardle" target="_blank" rel="noopener">Chris Mcardle</a></li>
           </ul>
+          <p>Real cars from Sketchfab, each licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> unless it says otherwise. Changed for the game: simplified, resized, and their pictures shrunk.</p>
+          <ul id="credit-cars" class="credit-list"></ul>
           <p>People and their animations: <a href="https://github.com/microsoft/Microsoft-Rocketbox" target="_blank" rel="noopener">Microsoft Rocketbox</a>, &copy; 2020 Microsoft, licensed under the <a href="https://github.com/microsoft/Microsoft-Rocketbox/blob/master/LICENSE.md" target="_blank" rel="noopener">MIT License</a>.</p>
           <p>Landmarks, towns and all sounds are made by the game itself.</p>
           <p>Made with <a href="https://www.babylonjs.com" target="_blank" rel="noopener">Babylon.js</a>. Pictures compressed with <a href="https://github.com/BinomialLLC/basis_universal" target="_blank" rel="noopener">Basis Universal</a> by Binomial (Apache 2.0).</p>

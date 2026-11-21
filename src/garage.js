@@ -1,4 +1,5 @@
 import { Color3 } from "@babylonjs/core";
+import REAL_CARS from "./realCars.json";
 
 // Vehicles you can pick. The concept car is the detailed one (it has a
 // cabin); the rest are the downloaded everyday cars and service vehicles
@@ -44,16 +45,121 @@ export const GARAGE = [
   big("bintruck", "Bin lorry", "Six wheels, very heavy", { power: 250000, maxDrive: 38000, grip: 0.95, mass: 16000, drag: 3.2 }),
 ];
 
+// ---------- The real cars ----------
+// Made by tools/prepare-cars.mjs from tools/cars.json (src/realCars.json is
+// written by it): real brands and models, each with its real power, weight,
+// top speed and 0-100 km/h time. The game's handling is worked out from those
+// below, so a hypercar really is much faster than a Mini.
+
+// Same sums as vehicle.js on a flat road at full throttle (and race.js).
+const ROLLING = 32;
+const accelAt = (spec, v) => (Math.min(spec.maxDrive, spec.power / Math.max(v, 1)) - spec.drag * v * v - ROLLING * v) / spec.mass;
+// Seconds from a standstill to `to` m/s (100 km/h unless said).
+function zeroTo100(spec, to = 100 / 3.6) {
+  let v = 0;
+  let t = 0;
+  const step = 1 / 60;
+  while (v < to && t < 60) {
+    v += accelAt(spec, v) * step;
+    t += step;
+  }
+  return t;
+}
+// Top speed: where the engine's power is all used up by air and rolling resistance.
+function topSpeed(spec) {
+  let lo = 1;
+  let hi = 250;
+  for (let i = 0; i < 40; i++) {
+    const v = (lo + hi) / 2;
+    if (spec.power / v > spec.drag * v * v + ROLLING * v) lo = v;
+    else hi = v;
+  }
+  return lo;
+}
+
+// Air resistance from the real top speed, then the pull off the line that
+// gives the real 0-100 km/h time.
+function realSpec(c) {
+  const v = c.topKmh / 3.6;
+  // (A very small engine, say an old Fiat's, couldn't even beat the game's
+  // rolling resistance up to its real top speed: it gets just enough to.)
+  const power = Math.max(c.kw * 1000, MIN_DRAG * v ** 3 + ROLLING * v * v);
+  const drag = Math.max(MIN_DRAG, (power - ROLLING * v * v) / v ** 3);
+  const spec = { power, mass: c.kg, drag, maxDrive: 10000, grip: c.grip ?? GRIP[c.class] ?? 1.15, redline: c.redline ?? 7000 };
+  // Cars that never reach 100 km/h are given their 0-80 km/h time instead.
+  const [to, time] = c.zeroTo80 ? [80 / 3.6, c.zeroTo80] : [100 / 3.6, c.zeroTo100];
+  let lo = c.kg * 0.5;
+  let hi = c.kg * 20;
+  for (let i = 0; i < 30; i++) {
+    spec.maxDrive = (lo + hi) / 2;
+    if (zeroTo100(spec, to) > time) lo = spec.maxDrive;
+    else hi = spec.maxDrive;
+  }
+  spec.maxDrive = Math.round(hi);
+  // (Four-wheel drive puts the power down a little better out of corners.)
+  if (c.drive === "AWD") spec.grip += 0.03;
+  return spec;
+}
+const MIN_DRAG = 0.12;
+// How well each kind of car holds the road (1.0 an old saloon, 1.4 a hypercar on slicks).
+const GRIP = { Hypercar: 1.4, Supercar: 1.32, Sports: 1.25, Muscle: 1.12, JDM: 1.22, "Hot hatch": 1.16, Classic: 1.0, Luxury: 1.14, "SUV/Truck": 1.0, EV: 1.18 };
+
+const real = (c) => ({
+  id: c.id,
+  model: c.id,
+  name: `${c.brand} ${c.model}`,
+  brand: c.brand,
+  modelName: c.model,
+  year: c.year,
+  country: c.country,
+  class: c.class,
+  kind: "car",
+  real: true,
+  spec: realSpec(c),
+  kw: c.kw,
+  sound: c.electric ? "electric" : c.sound,
+  electric: !!c.electric,
+  traffic: !!c.traffic,
+  credit: c.credit,
+});
+export const REAL = REAL_CARS.map(real);
+GARAGE.push(...REAL);
+
 // Free from the start: the concept car and the six everyday cars. The rest
 // are bought with credits won in races and at speed traps (credits.js).
 export const STARTERS = ["gt-red", "sedan", "hatchback", "compact", "wagon", "minivan", "suv"];
 
 // What a vehicle costs in credits: more the faster, quicker and grippier it
-// is (from 250 for a bus to 3,000 for the sports car), rounded to 50.
+// is (from 250 for a bus to 3,000 for the sports car), rounded to 50. The real
+// cars go much higher: from about 1,000 for a 1960s classic to 20,000 for the
+// fastest hypercar.
 export function price(entry) {
   if (STARTERS.includes(entry.id)) return 0;
+  if (entry.real) {
+    const p = figures(entry);
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    const rating = 0.45 * clamp01((p.topKmh - 150) / 300) + 0.4 * clamp01((12 - p.zeroTo100) / 9.6) + 0.15 * clamp01((entry.spec.grip - 1) / 0.43);
+    const credits = 800 * 25 ** rating;
+    return Math.round(credits / (credits > 5000 ? 500 : 50)) * (credits > 5000 ? 500 : 50);
+  }
   const s = stats(entry);
   return Math.round((150 + 379 * (s.speed + s.acceleration + s.grip) ** 1.9) / 50) * 50;
+}
+
+// What the garage shows: power, top speed and 0-100 km/h (or 0-60 mph), as the game drives it.
+const perf = new Map();
+export function figures(entry) {
+  if (!perf.has(entry)) {
+    const s = { drag: 0.42, maxDrive: 10500, ...entry.spec };
+    const tenths = (t) => Math.round(t * 10) / 10;
+    // (A real car shows its real power, even where the game gives it a little more.)
+    const kw = entry.kw ?? s.power / 1000;
+    const top = topSpeed(s) * 3.6;
+    // Slow cars: 0-80 km/h (0-50 mph) instead, as they hardly reach 100.
+    const slow = top < 110;
+    perf.set(entry, { kw: Math.round(kw), hp: Math.round(kw * 1.341), topKmh: Math.round(top), slow, zeroTo100: tenths(zeroTo100(s, (slow ? 80 : 100) / 3.6)), zeroTo60: tenths(zeroTo100(s, (slow ? 50 : 60) / 2.23694)) });
+  }
+  return perf.get(entry);
 }
 
 // Rough 0..1 scores for the bars shown in the garage.
