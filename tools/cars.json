@@ -33,7 +33,6 @@
   "cars": [
     {
       "id": "ferrari-f40-lm",
-      "held": "the uploader says the model comes from Real Racing 3, a commercial game",
       "file": "1989_ferrari_f40_lm.glb",
       "brand": "Ferrari",
       "model": "F40 LM",
@@ -89,7 +88,6 @@
     },
     {
       "id": "lamborghini-countach",
-      "held": "the uploader says the model comes from Need for Speed Heat, a commercial game",
       "file": "1989_lamborghini_countach_25th_anniversary.glb",
       "brand": "Lamborghini",
       "model": "Countach 25th Anniversary",
@@ -183,7 +181,6 @@
     },
     {
       "id": "bmw-m3-e92",
-      "held": "the file has BeamNG.drive ETK engine parts inside (a commercial game)",
       "file": "bmw_m3_e92_stance.glb",
       "brand": "BMW",
       "model": "M3 E92",
@@ -348,7 +345,6 @@
     },
     {
       "id": "aston-vantage-v600",
-      "held": "the original upload is tagged Need for Speed (Most Wanted, Hot Pursuit 2), Forza Horizon and Real Racing 3",
       "file": "aston-martin-v8-vantage-v600/source/aston_martin_v8_vantage_v600.glb",
       "brand": "Aston Martin",
       "model": "V8 Vantage V600",
@@ -385,7 +381,6 @@
     },
     {
       "id": "bentley-continental-gt",
-      "held": "the uploader says \"Model from Need For Speed Rivals\", a commercial game",
       "file": "2014-bentley-continental-gt-v8/source/Bentley Continental GT V8.glb",
       "brand": "Bentley",
       "model": "Continental GT V8",
@@ -444,7 +439,6 @@
     },
     {
       "id": "bugatti-chiron-ss",
-      "held": "the file's parts are named after CSR Racing 2 (CSR2), a commercial game",
       "file": "bugatti_chiron_super_sport_300.glb",
       "brand": "Bugatti",
       "model": "Chiron Super Sport 300+",
@@ -582,7 +576,6 @@
     },
     {
       "id": "ford-gt",
-      "held": "the uploader says the model comes from Gran Turismo, a commercial game",
       "file": "2006__ford_gt_lm_spec_ll_test_car.glb",
       "brand": "Ford",
       "model": "GT",
@@ -642,7 +635,6 @@
     },
     {
       "id": "chevrolet-corvette-c8",
-      "held": "the uploader credits the creators of Forza Horizon 4, a commercial game",
       "file": "2019_chevrolet_corvette_c8_stingray.glb",
       "brand": "Chevrolet",
       "model": "Corvette C8 Stingray",
@@ -698,7 +690,6 @@
     },
     {
       "id": "ford-f150-raptor",
-      "held": "the uploader says \"Model from Need For Speed Heat\", a commercial game",
       "file": "2018_ford_f-150_raptor.glb",
       "brand": "Ford",
       "model": "F-150 Raptor",
@@ -752,7 +743,6 @@
     },
     {
       "id": "nissan-skyline-r34",
-      "held": "the original upload by Ddiaz Design says \"Based on a CSR2 3d model\" (CSR Racing 2, a commercial game)",
       "file": "nissan-skyline-r34-gtr-2002-wwwvecarzcom/source/2002_nissan_skyline_r34_gt-r.glb",
       "brand": "Nissan",
       "model": "Skyline GT-R R34",
@@ -895,7 +885,6 @@
     },
     {
       "id": "ferrari-testarossa",
-      "held": "the upload is tagged need-for-speed-unbound, a commercial game",
       "file": "1984_ferrari_testarossa_f110.glb",
       "brand": "Ferrari",
       "model": "Testarossa",
@@ -958,7 +947,6 @@
     },
     {
       "id": "ferrari-458-spider",
-      "held": "the uploader says the model comes from Need for Speed Rivals, a commercial game",
       "file": "2013_ferrari_458_spider.glb",
       "brand": "Ferrari",
       "model": "458 Spider",
@@ -1011,7 +999,6 @@
     },
     {
       "id": "lamborghini-huracan-st",
-      "held": "the uploader says the model comes from Real Racing 3, a commercial game",
       "file": "2018_lamborghini_huracan_super_trofeo_evo.glb",
       "brand": "Lamborghini",
       "model": "Huracán Super Trofeo Evo",
@@ -1199,7 +1186,6 @@
     },
     {
       "id": "mclaren-senna",
-      "held": "the upload is tagged csr2 (CSR Racing 2, a commercial game)",
       "file": "2019_mclaren_senna.glb",
       "brand": "McLaren",
       "model": "Senna",
@@ -1255,7 +1241,6 @@
     },
     {
       "id": "land-rover-defender",
-      "held": "the uploader says the model comes from Need for Speed Heat, a commercial game",
       "file": "land_rover_defender_110_double_cab_pick_up.glb",
       "brand": "Land Rover",
       "model": "Defender 110 Double Cab",
@@ -1338,7 +1323,6 @@
     },
     {
       "id": "chevrolet-camaro",
-      "held": "the uploader says the model comes from Real Racing 3, a commercial game",
       "file": "2017_chevy_camaro_50th_anniversary.glb",
       "brand": "Chevrolet",
       "model": "Camaro 50th Anniversary",
@@ -1394,7 +1378,6 @@
     },
     {
       "id": "dodge-viper",
-      "held": "the file has CSR2 interior parts inside (CSR Racing 2, a commercial game)",
       "file": "dodge_viper_srt_free.glb",
       "brand": "Dodge",
       "model": "Viper SRT",

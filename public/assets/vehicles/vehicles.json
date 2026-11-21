@@ -1338,5 +1338,515 @@
   "flip": false,
   "wheelbase": 2.95,
   "wheelRadius": 0.367
+ },
+ {
+  "id": "ferrari-f40-lm",
+  "name": "Ferrari F40 LM",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.91,
+   1.19,
+   4.43
+  ],
+  "min": [
+   -0.96,
+   0,
+   -2.08
+  ],
+  "max": [
+   0.96,
+   1.19,
+   2.35
+  ],
+  "tris": 32857,
+  "lodTris": 6739,
+  "trisBefore": 80688,
+  "textureMB": 2.8,
+  "lodTextureMB": 0.5,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.37,
+  "wheelRadius": 0.327
+ },
+ {
+  "id": "lamborghini-countach",
+  "name": "Lamborghini Countach 25th Anniversary",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.05,
+   1.08,
+   4.14
+  ],
+  "min": [
+   -1.02,
+   0,
+   -2.03
+  ],
+  "max": [
+   1.02,
+   1.08,
+   2.11
+  ],
+  "tris": 29403,
+  "lodTris": 7023,
+  "trisBefore": 82927,
+  "textureMB": 2.1,
+  "lodTextureMB": 0.4,
+  "tailLamps": 3,
+  "flip": false,
+  "wheelbase": 2.42,
+  "wheelRadius": 0.293
+ },
+ {
+  "id": "bmw-m3-e92",
+  "name": "BMW M3 E92",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.01,
+   1.34,
+   4.62
+  ],
+  "min": [
+   -1,
+   0,
+   -2.43
+  ],
+  "max": [
+   1.01,
+   1.34,
+   2.19
+  ],
+  "tris": 36502,
+  "lodTris": 6664,
+  "trisBefore": 208998,
+  "textureMB": 0.1,
+  "lodTextureMB": 0,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.76,
+  "wheelRadius": 0.334
+ },
+ {
+  "id": "aston-vantage-v600",
+  "name": "Aston Martin V8 Vantage V600",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.08,
+   1.26,
+   4.75
+  ],
+  "min": [
+   -1.04,
+   0,
+   -2.4
+  ],
+  "max": [
+   1.04,
+   1.26,
+   2.35
+  ],
+  "tris": 35323,
+  "lodTris": 4104,
+  "trisBefore": 136452,
+  "textureMB": 2.4,
+  "lodTextureMB": 0.2,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.63,
+  "wheelRadius": 0.34
+ },
+ {
+  "id": "bentley-continental-gt",
+  "name": "Bentley Continental GT V8",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.23,
+   1.43,
+   4.81
+  ],
+  "min": [
+   -1.11,
+   0,
+   -2.48
+  ],
+  "max": [
+   1.12,
+   1.43,
+   2.33
+  ],
+  "tris": 31627,
+  "lodTris": 6783,
+  "trisBefore": 62012,
+  "textureMB": 2.2,
+  "lodTextureMB": 0.4,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.74,
+  "wheelRadius": 0.375
+ },
+ {
+  "id": "bugatti-chiron-ss",
+  "name": "Bugatti Chiron Super Sport 300+",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.19,
+   1.18,
+   4.79
+  ],
+  "min": [
+   -1.1,
+   0,
+   -2.47
+  ],
+  "max": [
+   1.1,
+   1.18,
+   2.32
+  ],
+  "tris": 32070,
+  "lodTris": 6007,
+  "trisBefore": 186746,
+  "textureMB": 0.8,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.72,
+  "wheelRadius": 0.349
+ },
+ {
+  "id": "ford-gt",
+  "name": "Ford GT",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.02,
+   1.56,
+   4.64
+  ],
+  "min": [
+   -1.01,
+   0,
+   -2.26
+  ],
+  "max": [
+   1.01,
+   1.56,
+   2.38
+  ],
+  "tris": 34271,
+  "lodTris": 6835,
+  "trisBefore": 260232,
+  "textureMB": 2.4,
+  "lodTextureMB": 0.5,
+  "tailLamps": 3,
+  "flip": true,
+  "wheelbase": 2.61,
+  "wheelRadius": 0.34
+ },
+ {
+  "id": "chevrolet-corvette-c8",
+  "name": "Chevrolet Corvette C8 Stingray",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.14,
+   1.19,
+   4.63
+  ],
+  "min": [
+   -1.07,
+   0,
+   -2.24
+  ],
+  "max": [
+   1.07,
+   1.19,
+   2.39
+  ],
+  "tris": 35576,
+  "lodTris": 5195,
+  "trisBefore": 263683,
+  "textureMB": 1.4,
+  "lodTextureMB": 0.7,
+  "tailLamps": 2,
+  "flip": true,
+  "wheelbase": 2.72,
+  "wheelRadius": 0.33
+ },
+ {
+  "id": "ford-f150-raptor",
+  "name": "Ford F-150 Raptor",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.6,
+   2.06,
+   5.89
+  ],
+  "min": [
+   -1.31,
+   0,
+   -3.11
+  ],
+  "max": [
+   1.29,
+   2.06,
+   2.78
+  ],
+  "tris": 34387,
+  "lodTris": 6085,
+  "trisBefore": 54340,
+  "textureMB": 0.7,
+  "lodTextureMB": 0.4,
+  "tailLamps": 3,
+  "flip": true,
+  "wheelbase": 3.55,
+  "wheelRadius": 0.475
+ },
+ {
+  "id": "nissan-skyline-r34",
+  "name": "Nissan Skyline GT-R R34",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.94,
+   1.32,
+   4.6
+  ],
+  "min": [
+   -0.97,
+   0,
+   -2.3
+  ],
+  "max": [
+   0.97,
+   1.32,
+   2.3
+  ],
+  "tris": 30611,
+  "lodTris": 6647,
+  "trisBefore": 227038,
+  "textureMB": 0.9,
+  "lodTextureMB": 0.4,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.67,
+  "wheelRadius": 0.313
+ },
+ {
+  "id": "ferrari-testarossa",
+  "name": "Ferrari Testarossa",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.98,
+   1.14,
+   4.49
+  ],
+  "min": [
+   -0.99,
+   0,
+   -2.11
+  ],
+  "max": [
+   0.99,
+   1.14,
+   2.38
+  ],
+  "tris": 36756,
+  "lodTris": 6727,
+  "trisBefore": 115109,
+  "textureMB": 2.1,
+  "lodTextureMB": 0.4,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.59,
+  "wheelRadius": 0.301
+ },
+ {
+  "id": "ferrari-458-spider",
+  "name": "Ferrari 458 Spider",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.27,
+   1.21,
+   4.53
+  ],
+  "min": [
+   -1.13,
+   0,
+   -2.1
+  ],
+  "max": [
+   1.13,
+   1.21,
+   2.43
+  ],
+  "tris": 30674,
+  "lodTris": 6858,
+  "trisBefore": 83321,
+  "textureMB": 1.1,
+  "lodTextureMB": 0.2,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.65,
+  "wheelRadius": 0.35
+ },
+ {
+  "id": "lamborghini-huracan-st",
+  "name": "Lamborghini Huracán Super Trofeo Evo",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.23,
+   1.23,
+   4.55
+  ],
+  "min": [
+   -1.12,
+   0,
+   -2.14
+  ],
+  "max": [
+   1.12,
+   1.23,
+   2.41
+  ],
+  "tris": 34436,
+  "lodTris": 7257,
+  "trisBefore": 56034,
+  "textureMB": 3.2,
+  "lodTextureMB": 0.5,
+  "tailLamps": 2,
+  "flip": false,
+  "wheelbase": 2.61,
+  "wheelRadius": 0.343
+ },
+ {
+  "id": "mclaren-senna",
+  "name": "McLaren Senna",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.15,
+   1.25,
+   4.74
+  ],
+  "min": [
+   -1.08,
+   0,
+   -2.18
+  ],
+  "max": [
+   1.08,
+   1.25,
+   2.56
+  ],
+  "tris": 32239,
+  "lodTris": 6320,
+  "trisBefore": 238310,
+  "textureMB": 1.2,
+  "lodTextureMB": 0.5,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.66,
+  "wheelRadius": 0.321
+ },
+ {
+  "id": "land-rover-defender",
+  "name": "Land Rover Defender 110 Double Cab",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2.04,
+   2.06,
+   4.79
+  ],
+  "min": [
+   -1.03,
+   0,
+   -2.63
+  ],
+  "max": [
+   1.02,
+   2.06,
+   2.16
+  ],
+  "tris": 28475,
+  "lodTris": 4900,
+  "trisBefore": 110678,
+  "textureMB": 2.1,
+  "lodTextureMB": 0.4,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.96,
+  "wheelRadius": 0.409
+ },
+ {
+  "id": "chevrolet-camaro",
+  "name": "Chevrolet Camaro 50th Anniversary",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   2,
+   1.36,
+   4.78
+  ],
+  "min": [
+   -1,
+   0,
+   -2.43
+  ],
+  "max": [
+   1,
+   1.36,
+   2.35
+  ],
+  "tris": 30685,
+  "lodTris": 5906,
+  "trisBefore": 46025,
+  "textureMB": 2.8,
+  "lodTextureMB": 0.4,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.79,
+  "wheelRadius": 0.359
+ },
+ {
+  "id": "dodge-viper",
+  "name": "Dodge Viper SRT",
+  "pack": "cars",
+  "wheels": 4,
+  "size": [
+   1.93,
+   1.25,
+   4.46
+  ],
+  "min": [
+   -0.96,
+   0,
+   -2.26
+  ],
+  "max": [
+   0.96,
+   1.25,
+   2.2
+  ],
+  "tris": 26162,
+  "lodTris": 5337,
+  "trisBefore": 241130,
+  "textureMB": 0,
+  "lodTextureMB": 0,
+  "tailLamps": 4,
+  "flip": false,
+  "wheelbase": 2.46,
+  "wheelRadius": 0.331
  }
 ]

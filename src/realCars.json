@@ -1,5 +1,26 @@
 [
  {
+  "id": "ferrari-f40-lm",
+  "brand": "Ferrari",
+  "model": "F40 LM",
+  "year": 1989,
+  "country": "Italy",
+  "class": "Supercar",
+  "kw": 530,
+  "kg": 1050,
+  "drive": "RWD",
+  "topKmh": 367,
+  "zeroTo100": 3.1,
+  "redline": 7800,
+  "sound": "sports",
+  "credit": {
+   "title": "1989 Ferrari F40 LM",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/8f67f3c0bbcc4e7084ee7f49cab9c7db",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "ferrari-488-pista",
   "brand": "Ferrari",
   "model": "488 Pista",
@@ -17,6 +38,27 @@
    "title": "Ferrari 488 Pista Widebody",
    "author": "dev365th",
    "url": "https://sketchfab.com/3d-models/16c28f5b3ed24991ac3d1208f4a8bc1f",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "lamborghini-countach",
+  "brand": "Lamborghini",
+  "model": "Countach 25th Anniversary",
+  "year": 1989,
+  "country": "Italy",
+  "class": "Supercar",
+  "kw": 335,
+  "kg": 1490,
+  "drive": "RWD",
+  "topKmh": 295,
+  "zeroTo100": 4.7,
+  "redline": 7500,
+  "sound": "sports",
+  "credit": {
+   "title": "1989 Lamborghini Countach 25th Anniversary",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/75acd9a580574e128c0886d2bc5a2b21",
    "license": "CC BY 4.0"
   }
  },
@@ -64,6 +106,27 @@
    "title": "1965 Alfa Romeo Giulia Sprint",
    "author": "dagtholander",
    "url": "https://sketchfab.com/3d-models/3b30a0277a7b45a58496c843e6588212",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "bmw-m3-e92",
+  "brand": "BMW",
+  "model": "M3 E92",
+  "year": 2008,
+  "country": "Germany",
+  "class": "Sports",
+  "kw": 309,
+  "kg": 1580,
+  "drive": "RWD",
+  "topKmh": 250,
+  "zeroTo100": 4.8,
+  "redline": 8400,
+  "sound": "sports",
+  "credit": {
+   "title": "BMW M3 e92 [stance]",
+   "author": "Black Snow",
+   "url": "https://sketchfab.com/3d-models/c35a14d811b042d792a6da69381f7f80",
    "license": "CC BY 4.0"
   }
  },
@@ -175,6 +238,53 @@
   }
  },
  {
+  "id": "aston-vantage-v600",
+  "brand": "Aston Martin",
+  "model": "V8 Vantage V600",
+  "year": 1998,
+  "country": "Britain",
+  "class": "Sports",
+  "kw": 447,
+  "kg": 1990,
+  "drive": "RWD",
+  "topKmh": 322,
+  "zeroTo100": 4.1,
+  "redline": 6500,
+  "sound": "sports",
+  "credit": {
+   "title": "Aston Martin V8 Vantage V600",
+   "author": "Alex.Ka.",
+   "url": "https://sketchfab.com/3d-models/62abad1d15954dba98681fd382b8f89b",
+   "license": "CC BY-NC 4.0",
+   "via": {
+    "title": "Aston Martin V8 Vantage V600",
+    "author": "ChoochooLi-sketchfab",
+    "url": "https://sketchfab.com/3d-models/cbdba425723b4f6b94513d9fad4e72a9"
+   }
+  }
+ },
+ {
+  "id": "bentley-continental-gt",
+  "brand": "Bentley",
+  "model": "Continental GT V8",
+  "year": 2014,
+  "country": "Britain",
+  "class": "Luxury",
+  "kw": 373,
+  "kg": 2295,
+  "drive": "AWD",
+  "topKmh": 303,
+  "zeroTo100": 4.8,
+  "redline": 6500,
+  "sound": "sports",
+  "credit": {
+   "title": "2014 Bentley Continental GT V8",
+   "author": "Galaxy Car Showroom",
+   "url": "https://sketchfab.com/3d-models/c4094bd0fea64777a7572f5384d9eedd",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "mini-cooper-s",
   "brand": "Mini",
   "model": "Cooper S",
@@ -193,6 +303,27 @@
    "title": "Mini Cooper S",
    "author": "cenobyte",
    "url": "https://sketchfab.com/3d-models/b262744901a04cda823f17289d1a4847",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "bugatti-chiron-ss",
+  "brand": "Bugatti",
+  "model": "Chiron Super Sport 300+",
+  "year": 2021,
+  "country": "France",
+  "class": "Hypercar",
+  "kw": 1177,
+  "kg": 1995,
+  "drive": "AWD",
+  "topKmh": 490,
+  "zeroTo100": 2.4,
+  "redline": 7100,
+  "sound": "sports",
+  "credit": {
+   "title": "Bugatti Chiron Super Sport 300+",
+   "author": "kevin (ケビン)",
+   "url": "https://sketchfab.com/3d-models/24c595760e194e63bcfc96508338fd3a",
    "license": "CC BY 4.0"
   }
  },
@@ -281,6 +412,27 @@
   }
  },
  {
+  "id": "ford-gt",
+  "brand": "Ford",
+  "model": "GT",
+  "year": 2006,
+  "country": "USA",
+  "class": "Supercar",
+  "kw": 410,
+  "kg": 1520,
+  "drive": "RWD",
+  "topKmh": 330,
+  "zeroTo100": 3.8,
+  "redline": 6500,
+  "sound": "sports",
+  "credit": {
+   "title": "2006 | Ford GT LM Spec ll Test Car",
+   "author": "kevin (ケビン)",
+   "url": "https://sketchfab.com/3d-models/dd6c3effdb1e43ecadace447ccbda68d",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "ford-mustang-1965",
   "brand": "Ford",
   "model": "Mustang convertible",
@@ -298,6 +450,27 @@
    "title": "1965 Ford Mustang Convertible",
    "author": "Kristian LaGrange",
    "url": "https://sketchfab.com/3d-models/05f2a294087541ab82f681136d134344",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "chevrolet-corvette-c8",
+  "brand": "Chevrolet",
+  "model": "Corvette C8 Stingray",
+  "year": 2019,
+  "country": "USA",
+  "class": "Sports",
+  "kw": 369,
+  "kg": 1530,
+  "drive": "RWD",
+  "topKmh": 312,
+  "zeroTo100": 3,
+  "redline": 6500,
+  "sound": "sports",
+  "credit": {
+   "title": "2019 Chevrolet Corvette C8 Stingray",
+   "author": "Hari",
+   "url": "https://sketchfab.com/3d-models/790c40ccff6843eab0b7b4bd18421ff8",
    "license": "CC BY 4.0"
   }
  },
@@ -323,6 +496,28 @@
   }
  },
  {
+  "id": "ford-f150-raptor",
+  "brand": "Ford",
+  "model": "F-150 Raptor",
+  "year": 2018,
+  "country": "USA",
+  "class": "SUV/Truck",
+  "kw": 336,
+  "kg": 2580,
+  "drive": "AWD",
+  "topKmh": 172,
+  "zeroTo100": 5.5,
+  "redline": 6000,
+  "sound": "sports",
+  "traffic": true,
+  "credit": {
+   "title": "2018 Ford F-150 Raptor",
+   "author": "Galaxy Car Showroom",
+   "url": "https://sketchfab.com/3d-models/096aa1ba46984eeeb196b75f4d213a0a",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "porsche-911-gt3",
   "brand": "Porsche",
   "model": "911 GT3",
@@ -341,6 +536,32 @@
    "author": "ChevroletSS",
    "url": "https://sketchfab.com/3d-models/78d5c47ab2554c2592b7e499179a0792",
    "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "nissan-skyline-r34",
+  "brand": "Nissan",
+  "model": "Skyline GT-R R34",
+  "year": 2002,
+  "country": "Japan",
+  "class": "JDM",
+  "kw": 206,
+  "kg": 1560,
+  "drive": "AWD",
+  "topKmh": 250,
+  "zeroTo100": 4.9,
+  "redline": 8000,
+  "sound": "sports",
+  "credit": {
+   "title": "2002 Nissan Skyline R34 GT-R",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/bb7b67852aee412eacc9c97270886a50",
+   "license": "CC BY 4.0",
+   "via": {
+    "title": "Nissan Skyline R34 GTR 2002 | www.vecarz.com",
+    "author": "heynic",
+    "url": "https://sketchfab.com/3d-models/03907515f2e24316b6fefa3ebdd4dd0a"
+   }
   }
  },
  {
@@ -428,6 +649,27 @@
   }
  },
  {
+  "id": "ferrari-testarossa",
+  "brand": "Ferrari",
+  "model": "Testarossa",
+  "year": 1984,
+  "country": "Italy",
+  "class": "Supercar",
+  "kw": 291,
+  "kg": 1506,
+  "drive": "RWD",
+  "topKmh": 290,
+  "zeroTo100": 5.2,
+  "redline": 6800,
+  "sound": "sports",
+  "credit": {
+   "title": "1984 Ferrari Testarossa (f110)",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/16b3c7c010b742acb3f18d0e1be64ac7",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "ferrari-250-gto",
   "brand": "Ferrari",
   "model": "250 GTO",
@@ -454,6 +696,27 @@
   }
  },
  {
+  "id": "ferrari-458-spider",
+  "brand": "Ferrari",
+  "model": "458 Spider",
+  "year": 2013,
+  "country": "Italy",
+  "class": "Supercar",
+  "kw": 419,
+  "kg": 1430,
+  "drive": "RWD",
+  "topKmh": 320,
+  "zeroTo100": 3.4,
+  "redline": 9000,
+  "sound": "sports",
+  "credit": {
+   "title": "2013 Ferrari 458 Spider",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/d12eab5e5c6d421da468e1c348a860a6",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "lamborghini-gallardo",
   "brand": "Lamborghini",
   "model": "Gallardo",
@@ -471,6 +734,27 @@
    "title": "Lamborghini Gallardo 2010",
    "author": "Artem P",
    "url": "https://sketchfab.com/3d-models/ff0eb2242d0e42eb8b7034b4db639e56",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "lamborghini-huracan-st",
+  "brand": "Lamborghini",
+  "model": "Huracán Super Trofeo Evo",
+  "year": 2018,
+  "country": "Italy",
+  "class": "Supercar",
+  "kw": 456,
+  "kg": 1270,
+  "drive": "RWD",
+  "topKmh": 300,
+  "zeroTo100": 3,
+  "redline": 8500,
+  "sound": "sports",
+  "credit": {
+   "title": "2018 Lamborghini Huracan Super Trofeo Evo",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/81aac998681246dbb89bb7f0751a2195",
    "license": "CC BY 4.0"
   }
  },
@@ -559,6 +843,27 @@
   }
  },
  {
+  "id": "mclaren-senna",
+  "brand": "McLaren",
+  "model": "Senna",
+  "year": 2019,
+  "country": "Britain",
+  "class": "Hypercar",
+  "kw": 588,
+  "kg": 1309,
+  "drive": "RWD",
+  "topKmh": 335,
+  "zeroTo100": 2.8,
+  "redline": 8250,
+  "sound": "sports",
+  "credit": {
+   "title": "2019 McLaren Senna",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/6924eb7b4dde44b19d87c8c31edc74b4",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "jaguar-e-type",
   "brand": "Jaguar",
   "model": "E-Type",
@@ -576,6 +881,27 @@
    "title": "Jaguar E_TYPE",
    "author": "Nommoc",
    "url": "https://sketchfab.com/3d-models/32aa25ea6e1b40f395b2aff33ca0a279",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "land-rover-defender",
+  "brand": "Land Rover",
+  "model": "Defender 110 Double Cab",
+  "year": 2015,
+  "country": "Britain",
+  "class": "SUV/Truck",
+  "kw": 90,
+  "kg": 2200,
+  "drive": "AWD",
+  "topKmh": 145,
+  "zeroTo100": 15.8,
+  "redline": 4500,
+  "sound": "diesel",
+  "credit": {
+   "title": "Land Rover Defender 110 Double Cab Pick Up",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/0fbbc07768a5456c9f6f8c9c7e048d28",
    "license": "CC BY 4.0"
   }
  },
@@ -601,6 +927,27 @@
   }
  },
  {
+  "id": "chevrolet-camaro",
+  "brand": "Chevrolet",
+  "model": "Camaro 50th Anniversary",
+  "year": 2017,
+  "country": "USA",
+  "class": "Muscle",
+  "kw": 339,
+  "kg": 1700,
+  "drive": "RWD",
+  "topKmh": 290,
+  "zeroTo100": 4,
+  "redline": 6500,
+  "sound": "sports",
+  "credit": {
+   "title": "2017 Chevy Camaro 50th Anniversary",
+   "author": "Ddiaz Design",
+   "url": "https://sketchfab.com/3d-models/3561f21d49cd45a18cfee52611f843a4",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
   "id": "chevrolet-impala-1967",
   "brand": "Chevrolet",
   "model": "Impala",
@@ -618,6 +965,27 @@
    "title": "Chevrolet Impala 1967- supernatural",
    "author": "Negrin",
    "url": "https://sketchfab.com/3d-models/cb03ce730658410499f084c493f142bd",
+   "license": "CC BY 4.0"
+  }
+ },
+ {
+  "id": "dodge-viper",
+  "brand": "Dodge",
+  "model": "Viper SRT",
+  "year": 2013,
+  "country": "USA",
+  "class": "Supercar",
+  "kw": 477,
+  "kg": 1520,
+  "drive": "RWD",
+  "topKmh": 330,
+  "zeroTo100": 3.5,
+  "redline": 6200,
+  "sound": "sports",
+  "credit": {
+   "title": "Dodge Viper SRT [Free]",
+   "author": "Black Snow",
+   "url": "https://sketchfab.com/3d-models/b4234b7970fa464faaecaf637acb0912",
    "license": "CC BY 4.0"
   }
  },
